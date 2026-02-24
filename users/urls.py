@@ -46,13 +46,10 @@ urlpatterns = [
     # Health check endpoint
     path('health/', HealthCheckView.as_view(), name='health-check'),
     
-    # Auth endpoints
+    # Auth endpoints — todas generadas por el router vía @action
     path('', include(router.urls)),
-    
-    # Ruta custom para login (usando action)
-    path('auth/login/', AuthViewSet.as_view({'post': 'login'}), name='auth-login'),
-    path('auth/me/', AuthViewSet.as_view({'get': 'me'}), name='auth-me'),
-    path('auth/logout/', AuthViewSet.as_view({'post': 'logout'}), name='auth-logout'),
+
+    # Token refresh — CookieTokenRefreshView no pertenece al ViewSet
     path('auth/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
 ]
 
