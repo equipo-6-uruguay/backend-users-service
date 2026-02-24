@@ -137,9 +137,15 @@ from .application.use_cases import (
     RegisterUserCommand,
     LoginCommand,
     GetUsersByRoleCommand,
+    DeactivateUserCommand,
+    ChangeUserEmailCommand,
     RegisterUserUseCase,
     LoginUseCase,
-    GetUsersByRoleUseCase
+    GetUsersByRoleUseCase,
+    GetUserUseCase,
+    ListUsersUseCase,
+    DeactivateUserUseCase,
+    ChangeUserEmailUseCase,
 )
 from .infrastructure.repository import DjangoUserRepository
 from .infrastructure.event_publisher import RabbitMQEventPublisher
@@ -147,6 +153,8 @@ from .infrastructure.cookie_utils import set_auth_cookies, clear_auth_cookies
 from .serializers import (
     RegisterUserSerializer,
     LoginSerializer,
+    UpdateUserSerializer,
+    DeactivateUserSerializer,
 )
 from .domain.exceptions import (
     UserAlreadyExists,
@@ -417,5 +425,127 @@ class CookieTokenRefreshView(APIView):
             return clear_auth_cookies(response)
 
 
-# TODO: Implementar UserViewSet cuando se completen las capas de dominio y aplicación
+class UserViewSet(viewsets.ViewSet):
+    """
+    ViewSet para gestión de usuarios.
+
+    Endpoints:
+    - GET    /api/users/                  — Listar todos los usuarios
+    - GET    /api/users/{id}/             — Obtener usuario por ID
+    - PATCH  /api/users/{id}/             — Actualizar email del usuario
+    - POST   /api/users/{id}/deactivate/  — Desactivar usuario
+    - DELETE /api/users/{id}/             — Eliminar usuario permanentemente
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.repository = DjangoUserRepository()
+        self.event_publisher = RabbitMQEventPublisher()
+
+    @staticmethod
+    def _serialize_user(user) -> dict:
+        """Serializa una entidad User de dominio a dict de respuesta."""
+        return {
+            'id': str(user.id),
+            'email': user.email,
+            'username': user.username,
+            'role': user.role.value,
+            'is_active': user.is_active,
+        }
+
+    def list(self, request):
+        """
+        GET /api/users/
+        Listar todos los usuarios del sistema.
+        """
+        use_case = ListUsersUseCase(repository=self.repository)
+        users = use_case.execute()
+        return Response(
+            [self._serialize_user(u) for u in users],
+            status=status.HTTP_200_OK,
+        )
+
+    def retrieve(self, request, pk=None):
+        """
+        GET /api/users/{id}/
+        Obtener un usuario por ID.
+        """
+        try:
+            use_case = GetUserUseCase(repository=self.repository)
+            user = use_case.execute(user_id=pk)
+            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
+        except UserNotFound:
+            return Response(
+                {'error': f'Usuario {pk} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def partial_update(self, request, pk=None):
+        """
+        PATCH /api/users/{id}/
+        Actualizar el email del usuario.
+        """
+        serializer = UpdateUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            command = ChangeUserEmailCommand(
+                user_id=pk,
+                new_email=serializer.validated_data['email'],
+            )
+            use_case = ChangeUserEmailUseCase(
+                repository=self.repository,
+                event_publisher=self.event_publisher,
+            )
+            user = use_case.execute(command)
+            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
+        except UserNotFound:
+            return Response(
+                {'error': f'Usuario {pk} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except UserAlreadyExists as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except (InvalidEmail, InvalidUserData) as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='deactivate')
+    def deactivate(self, request, pk=None):
+        """
+        POST /api/users/{id}/deactivate/
+        Desactivar un usuario (impide su acceso al sistema).
+        """
+        serializer = DeactivateUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            command = DeactivateUserCommand(
+                user_id=pk,
+                reason=serializer.validated_data.get('reason') or None,
+            )
+            use_case = DeactivateUserUseCase(
+                repository=self.repository,
+                event_publisher=self.event_publisher,
+            )
+            user = use_case.execute(command)
+            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
+        except UserNotFound:
+            return Response(
+                {'error': f'Usuario {pk} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def destroy(self, request, pk=None):
+        """
+        DELETE /api/users/{id}/
+        Eliminar un usuario permanentemente.
+        """
+        user = self.repository.find_by_id(pk)
+        if not user:
+            return Response(
+                {'error': f'Usuario {pk} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        self.repository.delete(pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 

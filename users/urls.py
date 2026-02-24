@@ -33,7 +33,7 @@ Define las rutas de la API REST.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import HealthCheckView, AuthViewSet, CookieTokenRefreshView
+from .views import HealthCheckView, AuthViewSet, CookieTokenRefreshView, UserViewSet
 
 # Router para ViewSets
 router = DefaultRouter()
@@ -41,6 +41,9 @@ router = DefaultRouter()
 # Registrar AuthViewSet
 # Las rutas create() se mapean a POST /api/auth/
 router.register(r'auth', AuthViewSet, basename='auth')
+
+# Registrar UserViewSet para CRUD de usuarios
+router.register(r'users', UserViewSet, basename='user')
 
 urlpatterns = [
     # Health check endpoint
