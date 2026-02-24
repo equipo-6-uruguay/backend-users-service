@@ -153,7 +153,8 @@ from .domain.exceptions import (
     InvalidEmail,
     InvalidUsername,
     InvalidUserData,
-    UserNotFound
+    UserNotFound,
+    InvalidCredentials,
 )
 
 
@@ -294,7 +295,7 @@ class AuthViewSet(viewsets.ViewSet):
             response = Response({'user': user_data}, status=status.HTTP_200_OK)
             return set_auth_cookies(response, tokens['access'], tokens['refresh'])
         
-        except UserNotFound as e:
+        except InvalidCredentials as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_401_UNAUTHORIZED
