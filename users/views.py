@@ -153,7 +153,8 @@ from .domain.exceptions import (
     InvalidEmail,
     InvalidUsername,
     InvalidUserData,
-    UserNotFound
+    UserNotFound,
+    InvalidRole,
 )
 
 
@@ -359,7 +360,12 @@ class AuthViewSet(viewsets.ViewSet):
             ]
             
             return Response(users_data, status=status.HTTP_200_OK)
-        
+
+        except InvalidRole as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as e:
             return Response(
                 {'error': f'Error inesperado: {str(e)}'},
