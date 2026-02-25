@@ -52,3 +52,25 @@ class UserNotFound(DomainException):
 class InvalidUserData(DomainException):
     """Se lanza cuando los datos del usuario son inválidos."""
     pass
+
+
+class InvalidCredentials(DomainException):
+    """Se lanza cuando las credenciales de autenticación son incorrectas.
+    
+    Reservada exclusivamente para fallos de login:
+    email no encontrado, password incorrecto, usuario inactivo.
+    """
+
+    def __init__(self, reason: str = "Credenciales inválidas"):
+        self.reason = reason
+        super().__init__(reason)
+class InvalidRole(DomainException):
+    """Se lanza cuando el rol proporcionado no existe en el sistema."""
+
+    VALID_ROLES = ['ADMIN', 'USER']
+
+    def __init__(self, role: str):
+        self.role = role
+        super().__init__(
+            f"Rol inválido: {role}. Valores permitidos: {', '.join(self.VALID_ROLES)}"
+        )

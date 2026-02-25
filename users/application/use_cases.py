@@ -14,7 +14,7 @@ from ..domain.factories import UserFactory
 from ..domain.repositories import UserRepository
 from ..domain.event_publisher import EventPublisher
 from ..domain.events import UserCreated, UserDeactivated
-from ..domain.exceptions import UserAlreadyExists, UserNotFound
+from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredentials, InvalidRole
 
 
 def _generate_tokens(user: User) -> dict[str, str]:
@@ -422,19 +422,19 @@ class LoginUseCase:
         """
         # 1. Buscar usuario por email
         user = self.repository.find_by_email(command.email)
-        
+
         if not user:
-            raise UserNotFound("Credenciales inválidas")
-        
+            raise InvalidCredentials()
+
         # 2. Verificar password
         password_hash = self._hash_password(command.password)
-        
+
         if user.password_hash != password_hash:
-            raise UserNotFound("Credenciales inválidas")
-        
+            raise InvalidCredentials()
+
         # 3. Validar que el usuario esté activo
         if not user.is_active:
-            raise UserNotFound("Usuario inactivo")
+            raise InvalidCredentials("Usuario inactivo")
         
         return {
             'user': user,
@@ -489,7 +489,7 @@ class GetUsersByRoleUseCase:
             try:
                 role = UserRole[role_text]
             except KeyError:
-                return []
+                raise InvalidRole(role_text)
         
         # Obtener usuarios por rol
         return self.repository.find_by_role(role)

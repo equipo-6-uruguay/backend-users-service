@@ -85,3 +85,13 @@ class AuthResponseSerializer(serializers.Serializer):
     They are set as HttpOnly cookies by the view layer.
     """
     user = AuthUserSerializer()
+
+
+class UpdateUserSerializer(serializers.Serializer):
+    """Serializer para actualizar el email de un usuario (PATCH /api/users/{id}/)."""
+    email = serializers.EmailField(required=True)
+
+
+class DeactivateUserSerializer(serializers.Serializer):
+    """Serializer para desactivar un usuario (POST /api/users/{id}/deactivate/)."""
+    reason = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
