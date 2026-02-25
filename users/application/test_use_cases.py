@@ -86,7 +86,7 @@ class TestRegisterUserUseCase:
             password="password123",
             role=UserRole.USER,
         )
-        assert result.role == UserRole.USER
+        assert result['user'].role == UserRole.USER
 
     def test_execute_raises_if_email_exists(self) -> None:
         """Registro con email duplicado lanza UserAlreadyExists."""

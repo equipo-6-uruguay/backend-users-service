@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any, Optional
 import hashlib
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.settings import api_settings
 
 from ..domain.entities import User, UserRole
 from ..domain.factories import UserFactory
@@ -19,7 +20,8 @@ from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredenti
 
 def _generate_tokens(user: User) -> dict[str, str]:
     """Genera access y refresh JWT con claims personalizados."""
-    refresh = RefreshToken.for_user(user)
+    refresh = RefreshToken()
+    refresh[str(api_settings.USER_ID_CLAIM)] = str(user.id)
     refresh['email'] = user.email
     refresh['role'] = user.role.value if hasattr(user.role, 'value') else str(user.role)
     return {
@@ -72,7 +74,7 @@ class LoginCommand:
 @dataclass
 class GetUsersByRoleCommand:
     """Comando: Obtener usuarios por rol."""
-    role: str
+    role: Optional[str]
 
 
 class CreateUserUseCase:
@@ -90,7 +92,7 @@ class CreateUserUseCase:
         self,
         repository: UserRepository,
         event_publisher: EventPublisher,
-        factory: UserFactory = None
+        factory: Optional[UserFactory] = None
     ):
         """
         Inyección de dependencias (DIP).
@@ -135,6 +137,7 @@ class CreateUserUseCase:
         user = self.repository.save(user)
         
         # 4. Generar evento de dominio (ahora que tenemos el ID)
+        assert user.id is not None, "El usuario persistido debe tener un ID"
         event = UserCreated(
             occurred_at=datetime.now(),
             user_id=user.id,
@@ -338,7 +341,7 @@ class RegisterUserUseCase:
         self,
         repository: UserRepository,
         event_publisher: EventPublisher,
-        factory: UserFactory = None
+        factory: Optional[UserFactory] = None
     ):
         self.repository = repository
         self.event_publisher = event_publisher
@@ -377,6 +380,7 @@ class RegisterUserUseCase:
         user = self.repository.save(user)
         
         # 5. Generar evento de dominio (ahora que tenemos el ID)
+        assert user.id is not None, "El usuario persistido debe tener un ID"
         event = UserCreated(
             occurred_at=datetime.now(),
             user_id=user.id,
@@ -480,6 +484,8 @@ class GetUsersByRoleUseCase:
         """
         # Validar que el rol sea válido y no venga vacío
         role_value = command.role
+        if role_value is None:
+            return []
         if isinstance(role_value, UserRole):
             role = role_value
         else:
