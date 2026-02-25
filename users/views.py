@@ -161,7 +161,9 @@ from .domain.exceptions import (
     InvalidEmail,
     InvalidUsername,
     InvalidUserData,
-    UserNotFound
+    UserNotFound,
+    InvalidCredentials,
+    InvalidRole,
 )
 
 
@@ -271,6 +273,7 @@ class AuthViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=False, methods=['post'], url_path='login', permission_classes=[AllowAny])
     def login(self, request):
         """
         POST /api/auth/login/
@@ -302,7 +305,7 @@ class AuthViewSet(viewsets.ViewSet):
             response = Response({'user': user_data}, status=status.HTTP_200_OK)
             return set_auth_cookies(response, tokens['access'], tokens['refresh'])
         
-        except UserNotFound as e:
+        except InvalidCredentials as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -367,7 +370,12 @@ class AuthViewSet(viewsets.ViewSet):
             ]
             
             return Response(users_data, status=status.HTTP_200_OK)
-        
+
+        except InvalidRole as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as e:
             return Response(
                 {'error': f'Error inesperado: {str(e)}'},
