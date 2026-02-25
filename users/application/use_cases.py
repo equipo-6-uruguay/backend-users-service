@@ -14,7 +14,7 @@ from ..domain.factories import UserFactory
 from ..domain.repositories import UserRepository
 from ..domain.event_publisher import EventPublisher
 from ..domain.events import UserCreated, UserDeactivated
-from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredentials
+from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredentials, InvalidRole
 
 
 def _generate_tokens(user: User) -> dict[str, str]:
@@ -489,7 +489,7 @@ class GetUsersByRoleUseCase:
             try:
                 role = UserRole[role_text]
             except KeyError:
-                return []
+                raise InvalidRole(role_text)
         
         # Obtener usuarios por rol
         return self.repository.find_by_role(role)
