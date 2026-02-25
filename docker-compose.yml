@@ -1,0 +1,271 @@
+services:
+
+  # ─── Infrastructure ────────────────────────────────────────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Databases ─────────────────────────────────────────────────────────────────
+
+  users-db:
+    image: postgres:16-alpine
+    container_name: users-db
+    environment:
+      POSTGRES_DB: users_db
+      POSTGRES_USER: users_user
+      POSTGRES_PASSWORD: users_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - users_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U users_user -d users_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  tickets-db:
+    image: postgres:16-alpine
+    container_name: tickets-db
+    environment:
+      POSTGRES_DB: sistema_tickets
+      POSTGRES_USER: tickets_user
+      POSTGRES_PASSWORD: tickets_pass
+    ports:
+      - "5436:5432"
+    volumes:
+      - tickets_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tickets_user -d sistema_tickets"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  assignment-db:
+    image: postgres:16-alpine
+    container_name: assignment-db
+    environment:
+      POSTGRES_DB: assessment_db
+      POSTGRES_USER: assessment_user
+      POSTGRES_PASSWORD: assessment_pass
+    ports:
+      - "5437:5432"
+    volumes:
+      - assignment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assessment_user -d assessment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:16-alpine
+    container_name: notification-db
+    environment:
+      POSTGRES_DB: notifications_db
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: notification_pass
+    ports:
+      - "5438:5432"
+    volumes:
+      - notification_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification_user -d notifications_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend Services ──────────────────────────────────────────────────────────
+
+  users-service:
+    build:
+      context: ./backend-users-service
+    container_name: users-service
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SETTINGS_MODULE: user_service.settings
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,users-service"
+      USER_SERVICE_SECRET_KEY: dev-secret-key-users
+      JWT_SECRET_KEY: shared-jwt-secret-for-dev
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost"
+      POSTGRES_DB: users_db
+      POSTGRES_USER: users_user
+      POSTGRES_PASSWORD: users_pass
+      POSTGRES_HOST: users-db
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_EXCHANGE_NAME: ticket_events
+      RABBITMQ_QUEUE_USERS: users_queue
+    ports:
+      - "8003:8000"
+    depends_on:
+      users-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  ticket-service:
+    build:
+      context: ./backend-ticket-service
+    container_name: ticket-service
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SETTINGS_MODULE: ticket_service.settings
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,ticket-service"
+      TICKET_SERVICE_SECRET_KEY: dev-secret-key-tickets
+      JWT_SECRET_KEY: shared-jwt-secret-for-dev
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost"
+      POSTGRES_DB: sistema_tickets
+      POSTGRES_USER: tickets_user
+      POSTGRES_PASSWORD: tickets_pass
+      POSTGRES_HOST: tickets-db
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_EXCHANGE_NAME: ticket_events
+    ports:
+      - "8000:8000"
+    depends_on:
+      tickets-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ./backend-notification-service
+    container_name: notification-service
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SETTINGS_MODULE: notification_service.settings
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,notification-service"
+      NOTIFICATION_SERVICE_SECRET_KEY: dev-secret-key-notifications
+      JWT_SECRET_KEY: shared-jwt-secret-for-dev
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost"
+      POSTGRES_DB: notifications_db
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: notification_pass
+      POSTGRES_HOST: notification-db
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_EXCHANGE_NAME: ticket_events
+      RABBITMQ_QUEUE_NOTIFICATION: notification_queue
+    ports:
+      - "8001:8000"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  assignment-service:
+    build:
+      context: ./backend-assignment-service
+    container_name: assignment-service
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SETTINGS_MODULE: assessment_service.settings
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,assignment-service"
+      ASSIGNMENT_SERVICE_SECRET_KEY: dev-secret-key-assignments
+      JWT_SECRET_KEY: shared-jwt-secret-for-dev
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost"
+      POSTGRES_DB: assessment_db
+      POSTGRES_USER: assessment_user
+      POSTGRES_PASSWORD: assessment_pass
+      POSTGRES_HOST: assignment-db
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_EXCHANGE_NAME: ticket_events
+      RABBITMQ_QUEUE_ASSIGNMENT: assignment_queue
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    ports:
+      - "8002:8000"
+    depends_on:
+      assignment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  assignment-worker:
+    build:
+      context: ./backend-assignment-service
+    container_name: assignment-worker
+    command: celery -A assessment_service worker --loglevel=info
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SETTINGS_MODULE: assessment_service.settings
+      ASSIGNMENT_SERVICE_SECRET_KEY: dev-secret-key-assignments
+      JWT_SECRET_KEY: shared-jwt-secret-for-dev
+      POSTGRES_DB: assessment_db
+      POSTGRES_USER: assessment_user
+      POSTGRES_PASSWORD: assessment_pass
+      POSTGRES_HOST: assignment-db
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_EXCHANGE_NAME: ticket_events
+      RABBITMQ_QUEUE_ASSIGNMENT: assignment_queue
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    depends_on:
+      assignment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  # ─── Frontend ──────────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_TICKET_SERVICE_URL: http://localhost:8000/api
+        VITE_NOTIFICATION_SERVICE_URL: http://localhost:8001/api
+        VITE_ASSIGNMENT_SERVICE_URL: http://localhost:8002/api
+        VITE_USERS_SERVICE_URL: http://localhost:8003/api
+    container_name: frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - users-service
+      - ticket-service
+      - notification-service
+      - assignment-service
+    restart: on-failure
+
+# ─── Volumes ───────────────────────────────────────────────────────────────────
+
+volumes:
+  rabbitmq_data:
+  users_db_data:
+  tickets_db_data:
+  assignment_db_data:
+  notification_db_data:
