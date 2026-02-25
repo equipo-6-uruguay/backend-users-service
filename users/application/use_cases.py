@@ -21,7 +21,7 @@ from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredenti
 def _generate_tokens(user: User) -> dict[str, str]:
     """Genera access y refresh JWT con claims personalizados."""
     refresh = RefreshToken()
-    refresh[api_settings.USER_ID_CLAIM] = str(user.id)
+    refresh[str(api_settings.USER_ID_CLAIM)] = str(user.id)
     refresh['email'] = user.email
     refresh['role'] = user.role.value if hasattr(user.role, 'value') else str(user.role)
     return {
@@ -74,7 +74,7 @@ class LoginCommand:
 @dataclass
 class GetUsersByRoleCommand:
     """Comando: Obtener usuarios por rol."""
-    role: str
+    role: Optional[str]
 
 
 class CreateUserUseCase:
@@ -484,6 +484,8 @@ class GetUsersByRoleUseCase:
         """
         # Validar que el rol sea válido y no venga vacío
         role_value = command.role
+        if role_value is None:
+            return []
         if isinstance(role_value, UserRole):
             role = role_value
         else:
