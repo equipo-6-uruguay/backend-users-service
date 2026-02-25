@@ -124,6 +124,9 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
    TODA la lógica está en los casos de uso.
 """
 
+import logging
+from typing import Dict, Any, cast
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets
@@ -132,6 +135,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.db import connection
+
+logger = logging.getLogger(__name__)
 
 from .application.use_cases import (
     RegisterUserCommand,
@@ -221,11 +226,12 @@ class AuthViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         
         # 2. Ejecutar caso de uso
+        data = cast(Dict[str, Any], serializer.validated_data)
         try:
             command = RegisterUserCommand(
-                email=serializer.validated_data['email'],
-                username=serializer.validated_data['username'],
-                password=serializer.validated_data['password'],
+                email=data['email'],
+                username=data['username'],
+                password=data['password'],
             )
             
             use_case = RegisterUserUseCase(
@@ -263,6 +269,7 @@ class AuthViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=False, methods=['post'], url_path='login')
     def login(self, request):
         """
         POST /api/auth/login/
@@ -273,10 +280,11 @@ class AuthViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         
         # 2. Ejecutar caso de uso
+        data = cast(Dict[str, Any], serializer.validated_data)
         try:
             command = LoginCommand(
-                email=serializer.validated_data['email'],
-                password=serializer.validated_data['password']
+                email=data['email'],
+                password=data['password']
             )
             
             use_case = LoginUseCase(repository=self.repository)
@@ -319,7 +327,7 @@ class AuthViewSet(viewsets.ViewSet):
                 'id': str(user.id),
                 'email': user.email,
                 'username': user.username,
-                'role': user.role if hasattr(user, 'role') else 'USER',
+                'role': user.role.value if hasattr(user, 'role') else 'USER',
                 'is_active': user.is_active,
             },
             status=status.HTTP_200_OK,
@@ -341,6 +349,11 @@ class AuthViewSet(viewsets.ViewSet):
         GET /api/auth/by-role/{role}/
         Obtener usuarios por rol (ADMIN o USER)
         """
+        if role is None:
+            return Response(
+                {'error': 'El parámetro role es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         try:
             command = GetUsersByRoleCommand(role=role)
             use_case = GetUsersByRoleUseCase(repository=self.repository)
@@ -407,8 +420,6 @@ class CookieTokenRefreshView(APIView):
 
         except Exception as e:
             # Catch-all to prevent 500 errors from unexpected exceptions
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f'Unexpected error during token refresh: {e}', exc_info=True)
             response = Response(
                 {'error': 'Error al renovar token'},
