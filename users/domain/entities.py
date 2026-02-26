@@ -201,7 +201,7 @@ class User:
             email=email.lower().strip(),
             username=username.strip(),
             password_hash=password_hash,
-            is_active=True,role=role,
+            is_active=True, role=role,
             created_at=datetime.now()
         )
         

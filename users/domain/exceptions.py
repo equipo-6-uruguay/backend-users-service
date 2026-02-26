@@ -64,6 +64,8 @@ class InvalidCredentials(DomainException):
     def __init__(self, reason: str = "Credenciales inválidas"):
         self.reason = reason
         super().__init__(reason)
+
+
 class InvalidRole(DomainException):
     """Se lanza cuando el rol proporcionado no existe en el sistema."""
 

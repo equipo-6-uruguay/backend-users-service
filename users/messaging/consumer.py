@@ -18,8 +18,8 @@ sys.path.insert(0, base_dir)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "user_service.settings")
 django.setup()
 
-import pika
-import json
+import pika  # noqa: E402
+import json  # noqa: E402
 
 # Configuración RabbitMQ desde variables de entorno
 RABBIT_HOST = os.environ.get('RABBITMQ_HOST', 'rabbitmq')

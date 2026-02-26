@@ -136,8 +136,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.db import connection
 
-logger = logging.getLogger(__name__)
-
 from .application.use_cases import (
     RegisterUserCommand,
     LoginCommand,
@@ -170,6 +168,8 @@ from .domain.exceptions import (
     InvalidCredentials,
     InvalidRole,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class HealthCheckView(APIView):
