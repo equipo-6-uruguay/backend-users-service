@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -33,51 +31,6 @@ services:
       timeout: 5s
       retries: 5
 
-  tickets-db:
-    image: postgres:15
-    container_name: tickets-db
-    environment:
-      POSTGRES_DB: tickets_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - tickets_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d tickets_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  assignment-db:
-    image: postgres:15
-    container_name: assignment-db
-    environment:
-      POSTGRES_DB: assignment_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - assignment_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d assignment_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  notification-db:
-    image: postgres:15
-    container_name: notification-db
-    environment:
-      POSTGRES_DB: notification_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - notification_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   users-service:
     build: .
     container_name: users-service
@@ -107,97 +60,6 @@ services:
       timeout: 5s
       retries: 5
 
-  ticket-service:
-    image: equipo6uruguay/ticket-service:latest
-    container_name: ticket-service
-    ports:
-      - "8002:8002"
-    environment:
-      TICKET_SERVICE_SECRET_KEY: changeme-ticket-secret
-      JWT_SECRET_KEY: changeme-jwt-secret
-      DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-      POSTGRES_DB: tickets_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_HOST: tickets-db
-      POSTGRES_PORT: "5432"
-      RABBITMQ_HOST: rabbitmq
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173"
-      CSRF_TRUSTED_ORIGINS: "http://localhost:5173"
-    depends_on:
-      tickets-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  notification-service:
-    image: equipo6uruguay/notification-service:latest
-    container_name: notification-service
-    ports:
-      - "8003:8003"
-    environment:
-      NOTIFICATION_SERVICE_SECRET_KEY: changeme-notification-secret
-      JWT_SECRET_KEY: changeme-jwt-secret
-      DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-      POSTGRES_DB: notification_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_HOST: notification-db
-      POSTGRES_PORT: "5432"
-      RABBITMQ_HOST: rabbitmq
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173"
-      CSRF_TRUSTED_ORIGINS: "http://localhost:5173"
-    depends_on:
-      notification-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  assignment-service:
-    image: equipo6uruguay/assignment-service:latest
-    container_name: assignment-service
-    ports:
-      - "8004:8004"
-    environment:
-      ASSIGNMENT_SERVICE_SECRET_KEY: changeme-assignment-secret
-      JWT_SECRET_KEY: changeme-jwt-secret
-      DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-      POSTGRES_DB: assignment_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_HOST: assignment-db
-      POSTGRES_PORT: "5432"
-      RABBITMQ_HOST: rabbitmq
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173"
-      CSRF_TRUSTED_ORIGINS: "http://localhost:5173"
-    depends_on:
-      assignment-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  frontend:
-    image: equipo6uruguay/frontend:latest
-    container_name: frontend
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_USERS_SERVICE_URL: "http://localhost:8001"
-      VITE_TICKET_SERVICE_URL: "http://localhost:8002"
-      VITE_NOTIFICATION_SERVICE_URL: "http://localhost:8003"
-      VITE_ASSIGNMENT_SERVICE_URL: "http://localhost:8004"
-    depends_on:
-      - users-service
-      - ticket-service
-      - notification-service
-      - assignment-service
-
 volumes:
   rabbitmq_data:
   users_db_data:
-  tickets_db_data:
-  assignment_db_data:
-  notification_db_data:
