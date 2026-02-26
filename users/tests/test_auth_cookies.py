@@ -9,8 +9,10 @@ Verifies that:
 """
 
 import pytest
+from unittest.mock import patch
 from django.test import TestCase, Client
 from users.models import User
+from users.infrastructure.event_publisher import RabbitMQEventPublisher
 import hashlib
 
 
@@ -84,7 +86,12 @@ class TestRegisterCookies(TestCase):
     """Verify that register sets HttpOnly cookies."""
 
     def setUp(self):
+        self.publish_patcher = patch.object(RabbitMQEventPublisher, 'publish', return_value=None)
+        self.publish_patcher.start()
         self.client = Client()
+
+    def tearDown(self):
+        self.publish_patcher.stop()
 
     def test_register_sets_httponly_cookies(self):
         """POST /api/auth/ (register) should set HttpOnly cookies."""

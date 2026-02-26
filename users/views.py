@@ -332,12 +332,13 @@ class AuthViewSet(viewsets.ViewSet):
         CookieJWTAuthentication). Requires authentication.
         """
         user = request.user
+        role = getattr(user.role, 'value', user.role) if hasattr(user, 'role') else 'USER'
         return Response(
             {
                 'id': str(user.id),
                 'email': user.email,
                 'username': user.username,
-                'role': user.role.value if hasattr(user, 'role') else 'USER',
+                'role': role,
                 'is_active': user.is_active,
             },
             status=status.HTTP_200_OK,
