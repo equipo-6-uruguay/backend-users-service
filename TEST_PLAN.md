@@ -413,19 +413,19 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-REG-001 | Registro exitoso con datos válidos | `POST` | `/api/auth/` | `{"email": "nuevo@test.com", "username": "nuevo", "password": "password123"}` | Respuesta con `user.role = "USER"`, cookies JWT establecidas | `201` |
-![alt text](image.png)
+![alt text](images/image.png)
 | INT-REG-002 | Registro rechaza email duplicado | `POST` | `/api/auth/` | Email ya existente | `{"error": "Ya existe un usuario con el email: ..."}` | `400` |
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 | INT-REG-003 | Registro rechaza password < 8 chars | `POST` | `/api/auth/` | `{"password": "short"}` | Error de validación | `400` |
-![alt text](image-2.png)
+![alt text](images/image-2.png)
 | INT-REG-004 | Registro rechaza username < 3 chars | `POST` | `/api/auth/` | `{"username": "ab"}` | Error de validación | `400` |
-![alt text](image-3.png)
+![alt text](images/image-3.png)
 | INT-REG-005 | Registro rechaza email inválido | `POST` | `/api/auth/` | `{"email": "no-es-email"}` | Error de validación | `400` |
-![alt text](image-4.png)
+![alt text](images/image-4.png)
 | INT-REG-006 | Registro ignora campo role (seguridad) | `POST` | `/api/auth/` | `{"role": "ADMIN", ...datos válidos}` | `user.role = "USER"` (no ADMIN) | `201` |
-![alt text](image-5.png)
+![alt text](images/image-5.png)
 | INT-REG-007 | Registro establece cookies HttpOnly | `POST` | `/api/auth/` | Datos válidos | Cookies `access_token` y `refresh_token` presentes, `HttpOnly=True` | `201` |
-![alt text](image-6.png)
+![alt text](images/image-6.png)
 ---
 
 ### 6.3 US-002: Login de Usuario (`POST /api/auth/login/`)
@@ -433,19 +433,19 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-LOG-001 | Login exitoso con credenciales válidas | `POST` | `/api/auth/login/` | `{"email": "nuevo@test.com", "password": "password123"}` | Respuesta con `user.id`, `email`, `username`, `role` | `200` |
-![alt text](image-7.png)
+![alt text](images/image-7.png)
 | INT-LOG-002 | Login establece cookies JWT | `POST` | `/api/auth/login/` | Credenciales válidas | Cookies `access_token`, `refresh_token` con `HttpOnly` | `200` |
-![alt text](image-8.png)
+![alt text](images/image-8.png)
 | INT-LOG-003 | Login fallido con password incorrecto | `POST` | `/api/auth/login/` | `{"password": "wrongpass"}` | `{"error": "Credenciales inválidas"}` | `401` |
-![alt text](image-9.png)
+![alt text](images/image-9.png)
 | INT-LOG-004 | Login fallido con email inexistente | `POST` | `/api/auth/login/` | `{"email": "noexiste@test.com"}` | `{"error": "Credenciales inválidas"}` | `401` |
-![alt text](image-10.png)
+![alt text](images/image-10.png)
 | INT-LOG-005 | Login rechazado para usuario inactivo | `POST` | `/api/auth/login/` | Email de usuario desactivado | `{"error": "..."}` (usuario inactivo) | `401` |
-![alt text](image-11.png)
+![alt text](images/image-11.png)
 | INT-LOG-006 | Login sin campo email (incompleto) | `POST` | `/api/auth/login/` | `{"password": "password123"}` | Error de validación serializer | `400` |
-![alt text](image-12.png)
+![alt text](images/image-12.png)
 | INT-LOG-007 | Login sin campo password (incompleto) | `POST` | `/api/auth/login/` | `{"email": "user@test.com"}` | Error de validación serializer | `400` |
-![alt text](image-13.png)
+![alt text](images/image-13.png)
 
 ---
 
@@ -454,9 +454,9 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-ME-001 | Perfil exitoso con JWT válido | `GET` | `/api/auth/me/` | Cookie `access_token` válida | `{"id", "email", "username", "role", "is_active"}` | `200` |
-![alt text](image-14.png)
+![alt text](images/image-14.png)
 | INT-ME-002 | Perfil rechazado sin autenticación | `GET` | `/api/auth/me/` | Sin cookies JWT | Error de autenticación | `401` |
-![alt text](image-15.png)
+![alt text](images/image-15.png)
 | INT-ME-003 | Perfil rechazado con token expirado | `GET` | `/api/auth/me/` | Cookie `access_token` expirada | Error de autenticación | `401` |
 
 ---
@@ -466,10 +466,10 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-OUT-001 | Logout exitoso limpia cookies | `POST` | `/api/auth/logout/` | Usuario autenticado | `{"detail": "Sesión cerrada"}`, cookies eliminadas | `200` |
-![alt text](image-16.png)
-![alt text](image-17.png)
+![alt text](images/image-16.png)
+![alt text](images/image-17.png)
 | INT-OUT-002 | Logout sin autenticación permitido | `POST` | `/api/auth/logout/` | Sin cookies | `{"detail": "Sesión cerrada"}` | `200` |
-![alt text](image-18.png)
+![alt text](images/image-18.png)
 
 ---
 
@@ -478,13 +478,13 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-ROL-001 | Usuarios con rol ADMIN | `GET` | `/api/auth/by-role/ADMIN/` | JWT válido | Lista donde todos tienen `role: "ADMIN"` | `200` |
-![alt text](image-19.png)
+![alt text](images/image-19.png)
 | INT-ROL-002 | Usuarios con rol USER | `GET` | `/api/auth/by-role/USER/` | JWT válido | Lista donde todos tienen `role: "USER"` | `200` |
-![alt text](image-20.png)
+![alt text](images/image-20.png)
 | INT-ROL-003 | Rol inválido retorna error | `GET` | `/api/auth/by-role/SUPERADMIN/` | JWT válido | `{"error": "Rol inválido: SUPERADMIN..."}` | `400` |
-![alt text](image-21.png)
+![alt text](images/image-21.png)
 | INT-ROL-004 | Sin autenticación rechazado | `GET` | `/api/auth/by-role/USER/` | Sin JWT | Error de autenticación | `401` |
-![alt text](image-22.png)
+![alt text](images/image-22.png)
 
 ---
 
@@ -493,11 +493,11 @@ De acuerdo con la identificación de riesgos en la sección 7, las pruebas se ab
 | ID | Escenario | Método | Endpoint | Datos de Entrada | Resultado Esperado | Status |
 |----|-----------|--------|----------|------------------|--------------------|--------|
 | INT-REF-001 | Refresh exitoso con cookie válida | `POST` | `/api/auth/refresh/` | Cookie `refresh_token` válida | `{"detail": "Token renovado"}`, nuevas cookies | `200` |
-![alt text](image-23.png)
+![alt text](images/image-23.png)
 | INT-REF-002 | Refresh sin cookie refresh_token | `POST` | `/api/auth/refresh/` | Sin cookie | `{"error": "Refresh token no encontrado"}` | `401` |
-![alt text](image-25.png)
+![alt text](images/image-25.png)
 | INT-REF-003 | Refresh con token inválido | `POST` | `/api/auth/refresh/` | Cookie `refresh_token` corrupta | `{"error": "Refresh token inválido o expirado"}` | `401` |
-![alt text](image-24.png)
+![alt text](images/image-24.png)
 
 ---
 
