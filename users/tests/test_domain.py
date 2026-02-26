@@ -13,7 +13,6 @@ from users.domain.exceptions import (
     InvalidUsername,
     InvalidUserData,
     UserAlreadyInactive,
-    UserNotFound
 )
 from users.domain.events import UserCreated, UserDeactivated, UserEmailChanged
 

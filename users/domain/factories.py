@@ -3,7 +3,6 @@ Factory - Crea instancias de entidades de dominio asegurando validez.
 Encapsula la lógica compleja de creación y validación.
 """
 
-import uuid
 import hashlib
 
 from .entities import User, UserRole

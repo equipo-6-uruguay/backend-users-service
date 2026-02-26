@@ -14,7 +14,7 @@ from ..domain.entities import User, UserRole
 from ..domain.factories import UserFactory
 from ..domain.repositories import UserRepository
 from ..domain.event_publisher import EventPublisher
-from ..domain.events import UserCreated, UserDeactivated
+from ..domain.events import UserCreated
 from ..domain.exceptions import UserAlreadyExists, UserNotFound, InvalidCredentials, InvalidRole
 
 
