@@ -13,7 +13,7 @@ from django.urls import path, include
 urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
-    
+
     # API de la aplicación users
     # Las rutas de users se configuran en users/urls.py
     path('api/', include('users.urls')),  # incluye las rutas /api/auth/, /api/health/

@@ -10,15 +10,15 @@ Define las rutas de la API REST.
     from django.urls import path, include
     from rest_framework.routers import DefaultRouter
     from .views import UserViewSet
-    
+
     # Configurar router de DRF
     router = DefaultRouter()
     router.register(r'users', UserViewSet, basename='user')
-    
+
     urlpatterns = [
         path('api/', include(router.urls)),
     ]
-    
+
     # Esto genera automáticamente las rutas:
     # POST   /api/users/                    → create()
     # GET    /api/users/                    → list()
@@ -50,11 +50,10 @@ router.register(r'users', UserViewSet, basename='user')
 urlpatterns = [
     # Health check endpoint
     path('health/', HealthCheckView.as_view(), name='health-check'),
-    
+
     # Auth endpoints — todas generadas por el router vía @action
     path('', include(router.urls)),
 
     # Token refresh — CookieTokenRefreshView no pertenece al ViewSet
     path('auth/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
 ]
-

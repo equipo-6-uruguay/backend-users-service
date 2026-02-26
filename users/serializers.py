@@ -14,22 +14,22 @@ Transforma datos entre JSON (HTTP) y objetos Python.
 
 ✅ EJEMPLO de lo que DEBE ir aquí:
     from rest_framework import serializers
-    
+
     class CreateUserSerializer(serializers.Serializer):
         '''Serializer para crear un usuario (INPUT)'''
         email = serializers.EmailField(required=True)
         username = serializers.CharField(min_length=3, max_length=50, required=True)
         password = serializers.CharField(min_length=8, write_only=True, required=True)
-    
+
     class UserSerializer(serializers.Serializer):
         '''Serializer para representar un usuario (OUTPUT)'''
         id = serializers.CharField(read_only=True)
         email = serializers.EmailField()
         username = serializers.CharField()
         is_active = serializers.BooleanField()
-        
+
         # NO incluimos password en el output por seguridad
-    
+
     class DeactivateUserSerializer(serializers.Serializer):
         '''Serializer para desactivar un usuario'''
         reason = serializers.CharField(max_length=200, required=True)
@@ -43,7 +43,7 @@ from rest_framework import serializers
 
 class RegisterUserSerializer(serializers.Serializer):
     """Serializer para registrar un nuevo usuario (INPUT).
-    
+
     SEGURIDAD: No se acepta campo 'role'. Todo registro público
     crea usuarios con rol USER. El rol solo puede ser asignado
     por un administrador autenticado.
