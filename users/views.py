@@ -16,7 +16,7 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
     from rest_framework import viewsets, status
     from rest_framework.decorators import action
     from rest_framework.response import Response
-    
+
     from users.application.use_cases import (
         CreateUserUseCase,
         GetUserUseCase,
@@ -34,16 +34,16 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
         InvalidEmail,
         UserNotFound
     )
-    
+
     class UserViewSet(viewsets.ViewSet):
         '''ViewSet para gestionar usuarios'''
-        
+
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             # Inyección de dependencias manual (en producción usar DI container)
             self.repository = DjangoUserRepository()
             self.event_publisher = RabbitMQEventPublisher()
-        
+
         def create(self, request):
             '''
             POST /api/users/
@@ -52,7 +52,7 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
             # 1. Validar input
             serializer = CreateUserSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            
+
             # 2. Ejecutar caso de uso
             try:
                 use_case = CreateUserUseCase(self.repository, self.event_publisher)
@@ -61,11 +61,11 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
                     username=serializer.validated_data['username'],
                     password=serializer.validated_data['password']
                 )
-                
+
                 # 3. Serializar output
                 output_serializer = UserSerializer(user)
                 return Response(output_serializer.data, status=status.HTTP_201_CREATED)
-            
+
             except UserAlreadyExists as e:
                 return Response(
                     {'error': str(e)},
@@ -76,7 +76,7 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
                     {'error': str(e)},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
+
         def retrieve(self, request, pk=None):
             '''
             GET /api/users/{id}/
@@ -85,16 +85,16 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
             try:
                 use_case = GetUserUseCase(self.repository)
                 user = use_case.execute(user_id=pk)
-                
+
                 serializer = UserSerializer(user)
                 return Response(serializer.data)
-            
+
             except UserNotFound:
                 return Response(
                     {'error': f'Usuario {pk} no encontrado'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+
         @action(detail=True, methods=['post'])
         def deactivate(self, request, pk=None):
             '''
@@ -103,17 +103,17 @@ Thin controllers que delegan TODA la lógica a los casos de uso.
             '''
             serializer = DeactivateUserSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            
+
             try:
                 use_case = DeactivateUserUseCase(self.repository, self.event_publisher)
                 user = use_case.execute(
                     user_id=pk,
                     reason=serializer.validated_data['reason']
                 )
-                
+
                 output_serializer = UserSerializer(user)
                 return Response(output_serializer.data)
-            
+
             except UserNotFound:
                 return Response(
                     {'error': f'Usuario {pk} no encontrado'},
@@ -175,14 +175,14 @@ from .domain.exceptions import (
 class HealthCheckView(APIView):
     """
     Endpoint de health check para verificar que el servicio está funcionando.
-    
+
     GET /api/health/
-    
+
     Returns:
         200: Servicio funcionando correctamente
         503: Servicio con problemas
     """
-    
+
     def get(self, request):
         """Verifica estado del servicio y conectividad con la base de datos"""
         health_status = {
@@ -190,7 +190,7 @@ class HealthCheckView(APIView):
             'status': 'healthy',
             'database': 'disconnected'
         }
-        
+
         # Verificar conexión a base de datos
         try:
             connection.ensure_connection()
@@ -199,21 +199,21 @@ class HealthCheckView(APIView):
             health_status['status'] = 'unhealthy'
             health_status['database'] = f'error: {str(e)}'
             return Response(health_status, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
+
         return Response(health_status, status=status.HTTP_200_OK)
 
 
 class AuthViewSet(viewsets.ViewSet):
     """
     ViewSet para autenticación de usuarios.
-    
+
     Endpoints:
     - POST /api/auth/register/ - Registrar un nuevo usuario
     - POST /api/auth/login/ - Autenticar un usuario
     """
 
     permission_classes = [IsAuthenticated]
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Inyección de dependencias
@@ -225,7 +225,7 @@ class AuthViewSet(viewsets.ViewSet):
         if self.action in ('create', 'login', 'logout'):
             return [AllowAny()]
         return super().get_permissions()
-    
+
     def create(self, request):
         """
         POST /api/auth/register/
@@ -234,7 +234,7 @@ class AuthViewSet(viewsets.ViewSet):
         # 1. Validar input
         serializer = RegisterUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         # 2. Ejecutar caso de uso
         data = cast(Dict[str, Any], serializer.validated_data)
         try:
@@ -243,16 +243,16 @@ class AuthViewSet(viewsets.ViewSet):
                 username=data['username'],
                 password=data['password'],
             )
-            
+
             use_case = RegisterUserUseCase(
                 repository=self.repository,
                 event_publisher=self.event_publisher
             )
-            
+
             auth_result = use_case.execute(command)
             user = auth_result['user']
             tokens = auth_result['tokens']
-            
+
             user_data = {
                 'id': str(user.id),
                 'email': user.email,
@@ -262,7 +262,7 @@ class AuthViewSet(viewsets.ViewSet):
             }
             response = Response({'user': user_data}, status=status.HTTP_201_CREATED)
             return set_auth_cookies(response, tokens['access'], tokens['refresh'])
-        
+
         except UserAlreadyExists as e:
             return Response(
                 {'error': str(e)},
@@ -278,7 +278,7 @@ class AuthViewSet(viewsets.ViewSet):
                 {'error': f'Error inesperado: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
+
     @action(detail=False, methods=['post'], url_path='login')
     def login(self, request):
         """
@@ -288,7 +288,7 @@ class AuthViewSet(viewsets.ViewSet):
         # 1. Validar input
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         # 2. Ejecutar caso de uso
         data = cast(Dict[str, Any], serializer.validated_data)
         try:
@@ -296,12 +296,12 @@ class AuthViewSet(viewsets.ViewSet):
                 email=data['email'],
                 password=data['password']
             )
-            
+
             use_case = LoginUseCase(repository=self.repository)
             auth_result = use_case.execute(command)
             user = auth_result['user']
             tokens = auth_result['tokens']
-            
+
             user_data = {
                 'id': str(user.id),
                 'email': user.email,
@@ -311,7 +311,7 @@ class AuthViewSet(viewsets.ViewSet):
             }
             response = Response({'user': user_data}, status=status.HTTP_200_OK)
             return set_auth_cookies(response, tokens['access'], tokens['refresh'])
-        
+
         except InvalidCredentials as e:
             return Response(
                 {'error': str(e)},
@@ -352,7 +352,7 @@ class AuthViewSet(viewsets.ViewSet):
         """
         response = Response({'detail': 'Sesión cerrada'}, status=status.HTTP_200_OK)
         return clear_auth_cookies(response)
-    
+
     @action(detail=False, methods=['get'], url_path='by-role/(?P<role>[^/.]+)')
     def by_role(self, request, role=None):
         """
@@ -368,7 +368,7 @@ class AuthViewSet(viewsets.ViewSet):
             command = GetUsersByRoleCommand(role=role)
             use_case = GetUsersByRoleUseCase(repository=self.repository)
             users = use_case.execute(command)
-            
+
             # Serializar lista de usuarios
             users_data = [
                 {
@@ -380,7 +380,7 @@ class AuthViewSet(viewsets.ViewSet):
                 }
                 for user in users
             ]
-            
+
             return Response(users_data, status=status.HTTP_200_OK)
 
         except InvalidRole as e:
@@ -566,4 +566,3 @@ class UserViewSet(viewsets.ViewSet):
             )
         self.repository.delete(pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
-

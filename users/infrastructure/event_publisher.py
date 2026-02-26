@@ -18,33 +18,33 @@ class RabbitMQEventPublisher(EventPublisher):
     Implementación del publicador de eventos usando RabbitMQ.
     Traduce eventos de dominio a mensajes y los publica en un exchange.
     """
-    
+
     def __init__(self):
         """Inicializa el publicador con configuración de RabbitMQ."""
         self.host = os.environ.get('RABBITMQ_HOST', 'localhost')
         self.exchange_name = os.environ.get('RABBITMQ_EXCHANGE_NAME', 'users_events')
-    
+
     def publish(self, event: DomainEvent, routing_key: str = '') -> None:
         """
         Publica un evento de dominio en RabbitMQ.
-        
+
         Args:
             event: Evento de dominio a publicar
             routing_key: Clave de enrutamiento (opcional, se genera automáticamente)
         """
         # Traducir evento de dominio a mensaje
         message = self._translate_event(event)
-        
+
         # Publicar en RabbitMQ
         self._publish_to_rabbitmq(message)
-    
+
     def _translate_event(self, event: DomainEvent) -> Dict[str, Any]:
         """
         Traduce un evento de dominio a un diccionario JSON serializable.
-        
+
         Args:
             event: Evento de dominio
-            
+
         Returns:
             Diccionario con los datos del evento
         """
@@ -77,11 +77,11 @@ class RabbitMQEventPublisher(EventPublisher):
                 "event_type": event.__class__.__name__,
                 "occurred_at": event.occurred_at.isoformat()
             }
-    
+
     def _publish_to_rabbitmq(self, message: Dict[str, Any]) -> None:
         """
         Publica un mensaje en RabbitMQ usando exchange fanout.
-        
+
         Args:
             message: Diccionario con los datos del mensaje
         """
@@ -89,17 +89,17 @@ class RabbitMQEventPublisher(EventPublisher):
             pika.ConnectionParameters(host=self.host)
         )
         channel = connection.channel()
-        
+
         # Declarar exchange fanout (broadcast)
         channel.exchange_declare(
             exchange=self.exchange_name,
             exchange_type='fanout',
             durable=True
         )
-        
+
         # Serializar mensaje a JSON
         body = json.dumps(message)
-        
+
         # Publicar al exchange
         channel.basic_publish(
             exchange=self.exchange_name,
@@ -110,5 +110,5 @@ class RabbitMQEventPublisher(EventPublisher):
                 delivery_mode=2  # Mensaje persistente
             )
         )
-        
+
         connection.close()
