@@ -6,7 +6,7 @@ Prueban reglas de negocio, entidades, factories y excepciones.
 import pytest
 from datetime import datetime
 
-from users.domain.entities import User
+from users.domain.entities import User, UserRole
 from users.domain.factories import UserFactory
 from users.domain.exceptions import (
     InvalidEmail,
@@ -44,6 +44,7 @@ class TestUserEntity:
                 username="testuser",
                 password_hash="hash",
                 is_active=True,
+                role=UserRole.USER,
                 created_at=datetime.now()
             )
 
@@ -56,6 +57,7 @@ class TestUserEntity:
                 username="testuser",
                 password_hash="hash",
                 is_active=True,
+                role=UserRole.USER,
                 created_at=datetime.now()
             )
 
@@ -68,6 +70,7 @@ class TestUserEntity:
                 username="",
                 password_hash="hash",
                 is_active=True,
+                role=UserRole.USER,
                 created_at=datetime.now()
             )
 
@@ -79,6 +82,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -99,6 +103,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=False,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -116,6 +121,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -134,6 +140,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -155,6 +162,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -169,6 +177,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -186,6 +195,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
@@ -205,6 +215,7 @@ class TestUserEntity:
             username="testuser",
             password_hash="hash",
             is_active=True,
+            role=UserRole.USER,
             created_at=datetime.now()
         )
 
