@@ -99,51 +99,6 @@ Use the following Markdown template for the issue body:
 
 Use the GitHub MCP tool to create the issue. Capture the **issue number** returned (e.g., `#42`) — it will be used in subsequent steps.
 
-### Add Issue to GitHub Project (Backlog)
-
-After creating the issue, it **must** be added to the team's GitHub Project so it appears in the backlog. This is required because repositories are organized per microservice under a shared project, and issues do not appear in the project backlog automatically.
-
-#### Identifying the Project — Auto-detection from Repo
-
-Do **not** ask the user for the project. Instead, detect it automatically:
-
-```
-1. Use GitHub MCP to fetch the repository metadata.
-2. Look for linked GitHub Projects via the repo's project associations
-   (e.g., list_projects_for_repo or equivalent MCP tool).
-3. If exactly one project is found → use it.
-4. If multiple projects are found → ask the user to pick one:
-   > Este repo está vinculado a más de un proyecto. ¿A cuál debo agregar el issue?
-   > {lista de proyectos encontrados}
-5. If no project is found → notify the user and stop:
-   > ⚠️ No se encontró ningún proyecto vinculado a este repositorio.
-   > Por favor, vincula el repo a un proyecto en GitHub y vuelve a intentarlo.
-```
-
-#### Adding to the Project — Fallback Strategy
-
-```
-TRY:
-  Add issue to project via GitHub MCP tool
-  (e.g., add_item_to_project passing detected project ID + issue node ID)
-
-IF MCP tool not available OR action fails:
-  FALLBACK → run via terminal/console:
-    gh project item-add {PROJECT_NUMBER} --owner {ORG_OR_USER} --url {ISSUE_URL}
-
-IF terminal/console is also unavailable OR command fails:
-  STOP the entire workflow.
-  Notify the user:
-
-  ❌ No fue posible agregar el issue al proyecto.
-  El MCP de GitHub no expone esta herramienta y no hay acceso a consola.
-  Por favor, agrégalo manualmente desde GitHub:
-  Proyecto → "Add items" → busca el issue #{ISSUE_NUMBER} del repo {REPO_NAME}.
-  Una vez agregado, avísame para continuar con el workflow.
-
-  Wait for user confirmation before proceeding to Step 2.
-```
-
 ---
 
 ## Step 2 — Create Branch from `develop`
