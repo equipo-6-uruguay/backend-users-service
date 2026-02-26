@@ -41,7 +41,7 @@ class TestRegistrationEndpoint:
         )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["role"] == "USER"
+        assert response.data["user"]["role"] == "USER"
 
     def test_register_without_role_creates_user(self) -> None:
         """Registro normal sin role crea usuario con role USER."""
@@ -56,7 +56,7 @@ class TestRegistrationEndpoint:
         )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["role"] == "USER"
+        assert response.data["user"]["role"] == "USER"
 
     def test_register_duplicate_email_fails(self) -> None:
         """Registro con email duplicado retorna 400 (no regresión)."""
@@ -119,7 +119,7 @@ class TestRegistrationEndpoint:
         )
 
         assert login_response.status_code == status.HTTP_200_OK
-        access_token = login_response.data["tokens"]["access"]
+        access_token = login_response.cookies["access_token"].value
 
         response = self.client.get(
             "/api/auth/by-role/ADMIN/",
