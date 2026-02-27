@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
 from django.http import Http404
-from rest_framework import status as http_status
 from rest_framework.exceptions import (
     APIException,
     AuthenticationFailed,
@@ -33,7 +32,6 @@ from rest_framework.exceptions import (
     ValidationError as DRFValidationError,
 )
 from rest_framework.response import Response
-from rest_framework.views import exception_handler as drf_default_handler
 
 from .api_response import _error_object, _meta
 from .domain.exceptions import (

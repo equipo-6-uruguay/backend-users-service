@@ -49,25 +49,14 @@ from .serializers import (
     DeactivateUserSerializer,
 )
 from .domain.exceptions import (
-    UserAlreadyExists,
-    InvalidEmail,
-    InvalidUsername,
-    InvalidUserData,
     UserNotFound,
-    InvalidCredentials,
-    InvalidRole,
 )
 from .api_response import (
     success_response,
     collection_response,
     no_content_response,
-    not_found_error,
-    conflict_error,
-    validation_error,
     unauthorized_error,
-    internal_error,
     user_resource,
-    _error_object,
     _meta,
 )
 
