@@ -35,11 +35,26 @@ un envelope uniforme:
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from rest_framework.response import Response
 from rest_framework import status as http_status
+
+# Thread-local storage para propagar request_id sin pasar request
+# a cada función. El middleware lo setea al inicio de cada petición.
+_local = threading.local()
+
+
+def set_request_id(request_id: str) -> None:
+    """Almacena el request_id en thread-local (llamado por el middleware)."""
+    _local.request_id = request_id
+
+
+def get_request_id() -> Optional[str]:
+    """Obtiene el request_id del thread-local, o None si no está seteado."""
+    return getattr(_local, "request_id", None)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +90,9 @@ def _meta(extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "users-service",
     }
+    request_id = get_request_id()
+    if request_id:
+        m["request_id"] = request_id
     if extra:
         m.update(extra)
     return m

@@ -17,6 +17,8 @@ from typing import Callable
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
+from .api_response import set_request_id
+
 logger = logging.getLogger(__name__)
 
 # Rutas que NO requieren content negotiation (health check, admin, etc.)
@@ -42,6 +44,9 @@ class APIHeadersMiddleware:
         # Generar o propagar X-Request-ID para trazabilidad
         request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
         request.META["HTTP_X_REQUEST_ID"] = request_id
+
+        # Almacenar en thread-local para que _meta() lo incluya en el body
+        set_request_id(request_id)
 
         response: HttpResponse = self.get_response(request)
 
@@ -135,6 +140,9 @@ class ContentNegotiationMiddleware:
                                 ),
                             }
                         ],
+                        "meta": {
+                            "request_id": request.META.get("HTTP_X_REQUEST_ID", ""),
+                        },
                     },
                     status=415,
                     content_type="application/vnd.api+json",
@@ -164,6 +172,9 @@ class ContentNegotiationMiddleware:
                             ),
                         }
                     ],
+                    "meta": {
+                        "request_id": request.META.get("HTTP_X_REQUEST_ID", ""),
+                    },
                 },
                 status=406,
                 content_type="application/vnd.api+json",
