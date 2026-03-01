@@ -34,14 +34,14 @@ class TestRegistrationEndpoint:
             {
                 "email": "attacker@test.com",
                 "username": "attacker",
-                "password": "password123",
+                "password": "Password123",
                 "role": "ADMIN",  # Attempted privilege escalation
             },
             format="json",
         )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["role"] == "USER"
+        assert response.data["data"]["attributes"]["role"] == "USER"
 
     def test_register_without_role_creates_user(self) -> None:
         """Registro normal sin role crea usuario con role USER."""
@@ -50,22 +50,22 @@ class TestRegistrationEndpoint:
             {
                 "email": "normal@test.com",
                 "username": "normaluser",
-                "password": "password123",
+                "password": "Password123",
             },
             format="json",
         )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["role"] == "USER"
+        assert response.data["data"]["attributes"]["role"] == "USER"
 
     def test_register_duplicate_email_fails(self) -> None:
-        """Registro con email duplicado retorna 400 (no regresión)."""
+        """Registro con email duplicado retorna 409 Conflict (JSON:API)."""
         self.client.post(
             "/api/auth/",
             {
                 "email": "dup@test.com",
-                "username": "user1",
-                "password": "password123",
+                "username": "user1aaa",
+                "password": "Password123",
             },
             format="json",
         )
@@ -74,16 +74,17 @@ class TestRegistrationEndpoint:
             "/api/auth/",
             {
                 "email": "dup@test.com",
-                "username": "user2",
-                "password": "password123",
+                "username": "user2bbb",
+                "password": "Password123",
             },
             format="json",
         )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert "errors" in response.data
 
     def test_register_short_password_fails(self) -> None:
-        """Registro con password corto retorna 400 (no regresión)."""
+        """Registro con password corto retorna 422 (JSON:API validation error)."""
         response = self.client.post(
             "/api/auth/",
             {
@@ -94,17 +95,18 @@ class TestRegistrationEndpoint:
             format="json",
         )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == 422
+        assert "errors" in response.data
 
     def test_by_role_admin_returns_users(self) -> None:
-        """GET /api/auth/by-role/ADMIN/ retorna lista de admins con JWT válido."""
+        """GET /api/auth/by-role/ADMIN/ retorna JSON:API collection de admins con JWT válido."""
         repository = DjangoUserRepository()
         factory = UserFactory()
         unique_suffix = uuid.uuid4().hex
         admin_user = factory.create(
             email=f"admin_{unique_suffix}@test.com",
             username=f"admin_{unique_suffix}",
-            password="password123",
+            password="Password123",
             role=UserRole.ADMIN,
         )
         repository.save(admin_user)
@@ -113,13 +115,13 @@ class TestRegistrationEndpoint:
             "/api/auth/login/",
             {
                 "email": admin_user.email,
-                "password": "password123",
+                "password": "Password123",
             },
             format="json",
         )
 
         assert login_response.status_code == status.HTTP_200_OK
-        access_token = login_response.data["tokens"]["access"]
+        access_token = login_response.cookies["access_token"].value
 
         response = self.client.get(
             "/api/auth/by-role/ADMIN/",
@@ -127,7 +129,10 @@ class TestRegistrationEndpoint:
         )
 
         assert response.status_code == status.HTTP_200_OK
+        # JSON:API collection: data is an array of resource objects
+        assert "data" in response.data
         assert any(
-            user["email"] == admin_user.email and user["role"] == "ADMIN"
-            for user in response.data
+            item["attributes"]["email"] == admin_user.email
+            and item["attributes"]["role"] == "ADMIN"
+            for item in response.data["data"]
         )

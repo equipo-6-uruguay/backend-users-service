@@ -1,0 +1,129 @@
+name: CI - Users Service
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+env:
+  PYTHON_VERSION: '3.12'
+  USER_SERVICE_SECRET_KEY: 'ci-test-secret-key-not-for-production'
+  DJANGO_DEBUG: 'true'
+  DJANGO_ALLOWED_HOSTS: 'localhost,127.0.0.1'
+  RABBITMQ_HOST: 'localhost'
+
+jobs:
+  lint:
+    name: Lint & Style
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Run flake8
+        run: |
+          flake8 users/ user_service/ --max-line-length=120 --exclude=__pycache__,migrations
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        run: |
+          python manage.py migrate --no-input
+
+      - name: Run domain tests
+        run: |
+          pytest users/tests/test_domain.py -v
+
+      - name: Run use case tests
+        run: |
+          pytest users/application/test_use_cases.py -v
+
+      - name: Run integration tests
+        run: |
+          pytest users/tests/test_integration.py -v
+
+      - name: Run all tests with coverage
+        run: |
+          pytest --cov=users --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t users-service:${{ github.sha }} .
+
+      - name: Verify container starts
+        run: |
+          docker run -d \
+            --name users-service-test \
+            -e USER_SERVICE_SECRET_KEY="${{ env.USER_SERVICE_SECRET_KEY }}" \
+            -e DJANGO_DEBUG=true \
+            -e DJANGO_ALLOWED_HOSTS=localhost \
+            -p 8001:8001 \
+            users-service:${{ github.sha }}
+          sleep 5
+          docker logs users-service-test
+          docker stop users-service-test
+          docker rm users-service-test

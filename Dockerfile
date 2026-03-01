@@ -20,5 +20,5 @@ COPY . /app/
 # Puerto del servicio (8001 para users-service)
 EXPOSE 8001
 
-# Comando por defecto
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8001"]
+# Comando por defecto: ejecutar migraciones y arrancar con gunicorn
+CMD ["sh", "-c", "python manage.py migrate && gunicorn user_service.wsgi:application --bind 0.0.0.0:8001 --workers 3"]

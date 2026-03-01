@@ -11,7 +11,7 @@ class DomainException(Exception):
 
 class InvalidEmail(DomainException):
     """Se lanza cuando el email proporcionado no es válido."""
-    
+
     def __init__(self, email: str):
         self.email = email
         super().__init__(f"Email inválido: {email}")
@@ -19,7 +19,7 @@ class InvalidEmail(DomainException):
 
 class InvalidUsername(DomainException):
     """Se lanza cuando el username no cumple con las reglas de negocio."""
-    
+
     def __init__(self, username: str):
         self.username = username
         super().__init__(f"Username inválido: {username}. Debe tener al menos 3 caracteres.")
@@ -27,7 +27,7 @@ class InvalidUsername(DomainException):
 
 class UserAlreadyExists(DomainException):
     """Se lanza cuando se intenta crear un usuario con un email ya registrado."""
-    
+
     def __init__(self, email: str):
         self.email = email
         super().__init__(f"Ya existe un usuario con el email: {email}")
@@ -35,7 +35,7 @@ class UserAlreadyExists(DomainException):
 
 class UserAlreadyInactive(DomainException):
     """Se lanza cuando se intenta desactivar un usuario ya inactivo (violación de idempotencia)."""
-    
+
     def __init__(self, user_id: str):
         self.user_id = user_id
         super().__init__(f"El usuario {user_id} ya está inactivo")
@@ -43,7 +43,7 @@ class UserAlreadyInactive(DomainException):
 
 class UserNotFound(DomainException):
     """Se lanza cuando no se encuentra un usuario por su ID."""
-    
+
     def __init__(self, user_id: str):
         self.user_id = user_id
         super().__init__(f"Usuario {user_id} no encontrado")
@@ -52,3 +52,27 @@ class UserNotFound(DomainException):
 class InvalidUserData(DomainException):
     """Se lanza cuando los datos del usuario son inválidos."""
     pass
+
+
+class InvalidCredentials(DomainException):
+    """Se lanza cuando las credenciales de autenticación son incorrectas.
+
+    Reservada exclusivamente para fallos de login:
+    email no encontrado, password incorrecto, usuario inactivo.
+    """
+
+    def __init__(self, reason: str = "Credenciales inválidas"):
+        self.reason = reason
+        super().__init__(reason)
+
+
+class InvalidRole(DomainException):
+    """Se lanza cuando el rol proporcionado no existe en el sistema."""
+
+    VALID_ROLES = ['ADMIN', 'USER']
+
+    def __init__(self, role: str):
+        self.role = role
+        super().__init__(
+            f"Rol inválido: {role}. Valores permitidos: {', '.join(self.VALID_ROLES)}"
+        )

@@ -15,14 +15,14 @@ class DjangoUserRepository(UserRepository):
     Implementación del repositorio usando Django ORM.
     Traduce entre entidades de dominio y modelos de Django.
     """
-    
+
     def save(self, user: DomainUser) -> DomainUser:
         """
         Persiste un usuario en la base de datos (crear o actualizar).
-        
+
         Args:
             user: Entidad de dominio
-            
+
         Returns:
             La entidad con el ID asignado
         """
@@ -45,16 +45,16 @@ class DjangoUserRepository(UserRepository):
                 role=user.role.value  # Convertir enum a string
             )
             user.id = str(django_user.id)
-        
+
         return user
-    
+
     def find_by_id(self, user_id: str) -> Optional[DomainUser]:
         """
         Busca un usuario por ID y lo convierte a entidad de dominio.
-        
+
         Args:
             user_id: ID del usuario
-            
+
         Returns:
             Entidad de dominio o None si no existe
         """
@@ -63,14 +63,14 @@ class DjangoUserRepository(UserRepository):
             return self._to_domain(django_user)
         except DjangoUser.DoesNotExist:
             return None
-    
+
     def find_by_email(self, email: str) -> Optional[DomainUser]:
         """
         Busca un usuario por email.
-        
+
         Args:
             email: Email del usuario
-            
+
         Returns:
             Entidad de dominio o None si no existe
         """
@@ -79,59 +79,59 @@ class DjangoUserRepository(UserRepository):
             return self._to_domain(django_user)
         except DjangoUser.DoesNotExist:
             return None
-    
+
     def find_all(self) -> List[DomainUser]:
         """
         Obtiene todos los usuarios ordenados por fecha de creación.
-        
+
         Returns:
             Lista de entidades de dominio
         """
         django_users = DjangoUser.objects.all().order_by('-created_at')
         return [self._to_domain(du) for du in django_users]
-    
+
     def exists_by_email(self, email: str) -> bool:
         """
         Verifica si existe un usuario con el email dado.
-        
+
         Args:
             email: Email a verificar
-            
+
         Returns:
             True si existe
         """
         return DjangoUser.objects.filter(email=email.lower()).exists()
-    
+
     def delete(self, user_id: str) -> None:
         """
         Elimina un usuario por ID.
-        
+
         Args:
             user_id: ID del usuario a eliminar
         """
         DjangoUser.objects.filter(pk=user_id).delete()
-    
+
     def find_by_role(self, role: UserRole) -> List[DomainUser]:
         """
         Busca usuarios por rol.
-        
+
         Args:
             role: Rol a filtrar (UserRole enum)
-            
+
         Returns:
             Lista de entidades de dominio con ese rol
         """
         django_users = DjangoUser.objects.filter(role=role.value).order_by('username')
         return [self._to_domain(du) for du in django_users]
-    
+
     def to_django_model(self, domain_user: DomainUser) -> DjangoUser:
         """
         Convierte una entidad de dominio a modelo Django sin hacer query adicional.
         Útil para serialización en la capa de presentación.
-        
+
         Args:
             domain_user: Entidad de dominio
-            
+
         Returns:
             Modelo Django (puede no estar guardado en BD)
         """
@@ -147,7 +147,7 @@ class DjangoUserRepository(UserRepository):
                 return django_user
             except DjangoUser.DoesNotExist:
                 pass
-        
+
         # Crear instancia Django en memoria (no guardada)
         return DjangoUser(
             id=domain_user.id,
@@ -158,15 +158,15 @@ class DjangoUserRepository(UserRepository):
             role=domain_user.role.value,  # Convertir enum a string
             created_at=getattr(domain_user, 'created_at', None)
         )
-    
+
     @staticmethod
     def _to_domain(django_user: DjangoUser) -> DomainUser:
         """
         Convierte un modelo Django a entidad de dominio.
-        
+
         Args:
             django_user: Modelo Django
-            
+
         Returns:
             Entidad de dominio
         """

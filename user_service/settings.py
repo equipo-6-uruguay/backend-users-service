@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'drf_spectacular',
 
     'users',
 ]
@@ -60,6 +61,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # --- API robustness (RFC 7231 / RFC 9110) ---
+    'users.middleware.APIHeadersMiddleware',
+    'users.middleware.ContentNegotiationMiddleware',
 ]
 
 ROOT_URLCONF = 'user_service.urls'
@@ -159,13 +163,36 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # JSON only — no Browsable API (security + RFC 7231 content negotiation)
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+    ),
+    # Global exception handler: convierte TODAS las excepciones a JSON:API
+    'EXCEPTION_HANDLER': 'users.exception_handler.jsonapi_exception_handler',
+    # OpenAPI schema class (drf-spectacular)
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# Disable Browsable API in production (security: prevents endpoint/model exposure)
-if not DEBUG:
-    REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = (
-        'rest_framework.renderers.JSONRenderer',
-    )
+# ---------------------------------------------------------------------------
+# drf-spectacular — OpenAPI 3.0 schema (sin UI)
+# ---------------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Users Service API',
+    'DESCRIPTION': (
+        'Microservicio de gestión de usuarios.\n\n'
+        'Respuestas en formato JSON:API (jsonapi.org).\n'
+        'Códigos de estado según RFC 7231 / RFC 9110.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'TAGS': [
+        {'name': 'auth', 'description': 'Autenticación (register, login, logout, refresh)'},
+        {'name': 'users', 'description': 'CRUD de usuarios'},
+        {'name': 'health', 'description': 'Health check del servicio'},
+    ],
+}
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
