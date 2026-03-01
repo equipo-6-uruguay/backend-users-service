@@ -1,10 +1,9 @@
 ---
 name: github-issue-workflow
 description: Complete GitHub workflow to create issues, branches, commits, and pull requests. Use when asked to create a GitHub issue, open a PR, push a branch, report a bug, add a feature, or manage the full GitHub development lifecycle. Triggers on keywords: issue, PR, pull request, branch, bug report, feature request, push changes, open ticket.
-license: MIT
 metadata:
   author: custom
-  version: "1.0"
+  version: "1.1"
   compatibility: Requires GitHub MCP server to be active
 ---
 
@@ -29,7 +28,7 @@ metadata:
 
 ## Overview
 
-This skill automates the full GitHub development workflow in 6 ordered steps:
+This skill automates the full GitHub development workflow in 7 ordered steps:
 
 1. Create a structured GitHub Issue
 2. Create a new branch from `develop` named after the issue number
@@ -37,6 +36,7 @@ This skill automates the full GitHub development workflow in 6 ordered steps:
 4. **Quality Gate** — validate SOLID principles and no code smells before pushing
 5. Push the branch to the remote repository
 6. Open a Pull Request from the branch toward `develop`, linking the issue
+7. **CI Verification** — monitor GitHub Actions and confirm the PR passes all checks
 
 ---
 
@@ -298,7 +298,134 @@ Replace `ISSUE_NUMBER` with the actual number captured in Step 1.
 
 ### MCP Action
 
-Use the GitHub MCP tool to create the pull request with the above title and body.
+Use the GitHub MCP tool to create the pull request with the above title and body. Capture the **PR number** returned — it will be used in Step 7.
+
+---
+
+## Step 7 — CI Verification (GitHub Actions)
+
+**This is the final step.** After the PR is open, verify that all GitHub Actions workflows triggered by the PR pass successfully.
+
+### 7.1 — Discover Workflow Runs
+
+Use the GitHub MCP tool to list the check runs or workflow runs associated with the PR's head commit SHA.
+
+```
+GET /repos/{owner}/{repo}/commits/{head_sha}/check-runs
+```
+
+> If the MCP exposes a tool like `list_check_runs_for_ref` or `get_pull_request_checks`, use it directly.
+
+**Wait up to 60 seconds** for GitHub Actions to register the triggered workflows before the first poll.
+
+### 7.2 — Polling Strategy
+
+CI pipelines may take time. Use the following polling loop:
+
+```
+MAX_ATTEMPTS = 20
+POLL_INTERVAL = 30 seconds
+TIMEOUT = 10 minutes
+
+FOR attempt IN 1..MAX_ATTEMPTS:
+  Fetch current status of all check runs for the PR
+
+  IF all check runs have status = "completed":
+    EXIT loop → proceed to 7.3
+
+  IF any check run has status = "in_progress" OR "queued":
+    Notify user: "⏳ CI still running... (attempt {attempt}/{MAX_ATTEMPTS})"
+    Wait POLL_INTERVAL seconds
+    Continue loop
+
+IF loop ends without completion:
+  → Notify user of timeout (see 7.4 — Timeout Handling)
+```
+
+> ⚠️ **Important:** Do not poll more frequently than every 30 seconds to avoid rate-limiting by the GitHub API.
+
+### 7.3 — Evaluate Results
+
+Once all check runs are completed, evaluate the conclusion of each one:
+
+| Conclusion | Meaning |
+|---|---|
+| `success` | ✅ Check passed |
+| `failure` | ❌ Check failed — requires attention |
+| `cancelled` | ⚠️ Check was cancelled |
+| `skipped` | ℹ️ Check was intentionally skipped |
+| `timed_out` | ❌ Check exceeded its time limit |
+| `action_required` | ⚠️ Manual action needed (e.g. approval gate) |
+| `neutral` | ℹ️ Informational only, does not block |
+
+#### All checks passed
+
+If every required check has conclusion `success` (or `skipped` / `neutral` for non-blocking ones):
+
+```
+✅ CI passed — all GitHub Actions checks completed successfully.
+
+PR #PR_NUMBER is ready for review.
+```
+
+#### One or more checks failed
+
+If any required check has conclusion `failure` or `timed_out`:
+
+```
+❌ CI failed on PR #PR_NUMBER.
+
+The following checks did not pass:
+  - {check_name}: {conclusion} — {details_url}
+
+Suggested next steps:
+  1. Review the failed workflow logs at the URL above.
+  2. Fix the root cause in the codebase.
+  3. Commit the fix to branch {BRANCH_NAME} following Conventional Commits (Step 3).
+  4. Push the fix (Step 5) — GitHub Actions will re-trigger automatically.
+  5. Re-run Step 7 to verify CI passes.
+```
+
+> **Note:** If a fix is committed and pushed, re-execute this Step 7 from the beginning to re-verify CI on the new commit.
+
+### 7.4 — Timeout Handling
+
+If the polling loop exhausts all attempts without CI completing:
+
+```
+⚠️ CI verification timed out after 10 minutes.
+
+The following checks are still running or pending:
+  - {check_name}: {status}
+
+The PR #PR_NUMBER has been created, but CI status could not be confirmed.
+
+Please monitor the workflow runs manually at:
+  https://github.com/{owner}/{repo}/pull/{PR_NUMBER}/checks
+
+Once CI completes, verify all checks pass before requesting a review.
+```
+
+### 7.5 — Fallback: MCP Cannot Access Check Runs
+
+If the GitHub MCP does not expose check run tools, fall back to the GitHub CLI:
+
+```bash
+# Poll check status via CLI
+gh pr checks {PR_NUMBER} --repo {OWNER}/{REPO} --watch
+```
+
+If CLI is also unavailable:
+
+```
+⚠️ No fue posible verificar el CI automáticamente.
+El MCP de GitHub no expone herramientas de check runs y no hay acceso a consola.
+
+Por favor, verifica manualmente el estado del CI en:
+  https://github.com/{owner}/{repo}/pull/{PR_NUMBER}/checks
+
+Avísame si algún check falla para ayudarte a diagnosticar el problema.
+```
 
 ---
 
@@ -318,6 +445,7 @@ After completing all steps, confirm:
 - [ ] ✅ Branch pushed to remote
 - [ ] ✅ PR opened from feature branch → `develop`
 - [ ] ✅ PR description contains `Fixes #ISSUE_NUMBER` or `Closes #ISSUE_NUMBER`
+- [ ] ✅ CI verified — all GitHub Actions checks passed on PR
 
 ---
 
@@ -329,3 +457,6 @@ After completing all steps, confirm:
 - **Quality Gate keeps failing:** Show the specific violations found, apply fixes, and re-evaluate. Limit auto-fix attempts to 3 before asking the user for input.
 - **GitHub MCP not available:** Stop the entire workflow and show the prerequisite error message.
 - **Merge conflicts on PR creation:** Notify the user that conflicts exist and suggest rebasing the branch onto `develop` before proceeding.
+- **CI fails after fix commit:** Re-execute Step 7 from scratch against the new head SHA. Do not assume the previous results are still valid.
+- **No workflows triggered on PR:** This may mean no GitHub Actions are configured in the repository. Notify the user and skip Step 7 gracefully — do not treat absence of workflows as a failure.
+- **`action_required` conclusion:** This typically means a required approval gate (e.g. environment protection rule). Notify the user and do not treat it as a CI failure.
