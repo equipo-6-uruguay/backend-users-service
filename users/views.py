@@ -1,131 +1,20 @@
 """
 users/views.py
 
-📋 CAPA DE PRESENTACIÓN - Controladores HTTP
+Capa de presentacion -- Controladores HTTP (thin controllers).
 
-🎯 PROPÓSITO:
-Thin controllers que delegan TODA la lógica a los casos de uso.
+Cada vista/accion delega TODA la logica a los casos de uso y devuelve
+respuestas en formato **JSON:API** (jsonapi.org) con codigos de estado
+alineados a **RFC 7231 / RFC 9110**.
 
-📐 ESTRUCTURA:
-- ViewSets de DRF para operaciones CRUD
-- Cada acción ejecuta UN caso de uso
-- Captura excepciones de dominio y las convierte en respuestas HTTP
-- NO contiene lógica de negocio
-
-✅ EJEMPLO de lo que DEBE ir aquí:
-    from rest_framework import viewsets, status
-    from rest_framework.decorators import action
-    from rest_framework.response import Response
-
-    from users.application.use_cases import (
-        CreateUserUseCase,
-        GetUserUseCase,
-        DeactivateUserUseCase
-    )
-    from users.infrastructure.repository import DjangoUserRepository
-    from users.infrastructure.event_publisher import RabbitMQEventPublisher
-    from users.serializers import (
-        CreateUserSerializer,
-        UserSerializer,
-        DeactivateUserSerializer
-    )
-    from users.domain.exceptions import (
-        UserAlreadyExists,
-        InvalidEmail,
-        UserNotFound
-    )
-
-    class UserViewSet(viewsets.ViewSet):
-        '''ViewSet para gestionar usuarios'''
-
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            # Inyección de dependencias manual (en producción usar DI container)
-            self.repository = DjangoUserRepository()
-            self.event_publisher = RabbitMQEventPublisher()
-
-        def create(self, request):
-            '''
-            POST /api/users/
-            Crea un nuevo usuario
-            '''
-            # 1. Validar input
-            serializer = CreateUserSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-
-            # 2. Ejecutar caso de uso
-            try:
-                use_case = CreateUserUseCase(self.repository, self.event_publisher)
-                user = use_case.execute(
-                    email=serializer.validated_data['email'],
-                    username=serializer.validated_data['username'],
-                    password=serializer.validated_data['password']
-                )
-
-                # 3. Serializar output
-                output_serializer = UserSerializer(user)
-                return Response(output_serializer.data, status=status.HTTP_201_CREATED)
-
-            except UserAlreadyExists as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            except InvalidEmail as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        def retrieve(self, request, pk=None):
-            '''
-            GET /api/users/{id}/
-            Obtiene un usuario por ID
-            '''
-            try:
-                use_case = GetUserUseCase(self.repository)
-                user = use_case.execute(user_id=pk)
-
-                serializer = UserSerializer(user)
-                return Response(serializer.data)
-
-            except UserNotFound:
-                return Response(
-                    {'error': f'Usuario {pk} no encontrado'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-        @action(detail=True, methods=['post'])
-        def deactivate(self, request, pk=None):
-            '''
-            POST /api/users/{id}/deactivate/
-            Desactiva un usuario
-            '''
-            serializer = DeactivateUserSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-
-            try:
-                use_case = DeactivateUserUseCase(self.repository, self.event_publisher)
-                user = use_case.execute(
-                    user_id=pk,
-                    reason=serializer.validated_data['reason']
-                )
-
-                output_serializer = UserSerializer(user)
-                return Response(output_serializer.data)
-
-            except UserNotFound:
-                return Response(
-                    {'error': f'Usuario {pk} no encontrado'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-💡 Los ViewSets son THIN CONTROLLERS: solo traducen HTTP a dominio y viceversa.
-   TODA la lógica está en los casos de uso.
+Las excepciones de dominio y DRF son capturadas por el exception handler
+global (``users.exception_handler.jsonapi_exception_handler``), por lo que
+los ``try/except`` en vistas se limitan a conversiones especificas de
+HTTP-dominio que requieran cabeceras o logica extra (p.ej. Location, cookies).
 """
 
 import logging
-from typing import Dict, Any, cast
+from typing import Any, Dict, cast
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -160,261 +49,258 @@ from .serializers import (
     DeactivateUserSerializer,
 )
 from .domain.exceptions import (
-    UserAlreadyExists,
-    InvalidEmail,
-    InvalidUsername,
-    InvalidUserData,
     UserNotFound,
-    InvalidCredentials,
-    InvalidRole,
+)
+from .api_response import (
+    success_response,
+    collection_response,
+    no_content_response,
+    unauthorized_error,
+    user_resource,
+    _meta,
 )
 
 logger = logging.getLogger(__name__)
 
 
+# ===========================================================================
+# Health Check
+# ===========================================================================
+
 class HealthCheckView(APIView):
     """
-    Endpoint de health check para verificar que el servicio está funcionando.
-
     GET /api/health/
 
-    Returns:
-        200: Servicio funcionando correctamente
-        503: Servicio con problemas
+    Health check -- indica si el servicio y sus dependencias estan operativos.
+
+    Responses:
+        200: Servicio healthy.
+        503: Servicio unhealthy (p.ej. base de datos inaccesible).
     """
 
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
     def get(self, request):
-        """Verifica estado del servicio y conectividad con la base de datos"""
-        health_status = {
-            'service': 'users-service',
-            'status': 'healthy',
-            'database': 'disconnected'
+        """Verifica estado del servicio y conectividad con la base de datos."""
+        health: Dict[str, Any] = {
+            "status": "healthy",
+            "service": "users-service",
+            "checks": {
+                "database": "connected",
+            },
         }
 
-        # Verificar conexión a base de datos
         try:
             connection.ensure_connection()
-            health_status['database'] = 'connected'
         except Exception as e:
-            health_status['status'] = 'unhealthy'
-            health_status['database'] = f'error: {str(e)}'
-            return Response(health_status, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            health["status"] = "unhealthy"
+            health["checks"]["database"] = f"error: {e}"
+            return Response(
+                {"data": health, "meta": _meta()},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content_type="application/vnd.api+json",
+            )
 
-        return Response(health_status, status=status.HTTP_200_OK)
+        return Response(
+            {"data": health, "meta": _meta()},
+            status=status.HTTP_200_OK,
+            content_type="application/vnd.api+json",
+        )
 
+
+# ===========================================================================
+# Auth ViewSet
+# ===========================================================================
 
 class AuthViewSet(viewsets.ViewSet):
     """
-    ViewSet para autenticación de usuarios.
+    Autenticacion de usuarios.
 
     Endpoints:
-    - POST /api/auth/register/ - Registrar un nuevo usuario
-    - POST /api/auth/login/ - Autenticar un usuario
+        POST   /api/auth/           -- Registrar nuevo usuario (201 Created).
+        POST   /api/auth/login/     -- Autenticar usuario (200 OK + cookies).
+        POST   /api/auth/logout/    -- Cerrar sesion (200 OK, limpia cookies).
+        GET    /api/auth/me/        -- Datos del usuario autenticado (200 OK).
+        GET    /api/auth/by-role/{role}/ -- Usuarios filtrados por rol (200 OK).
     """
 
     permission_classes = [IsAuthenticated]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Inyección de dependencias
         self.repository = DjangoUserRepository()
         self.event_publisher = RabbitMQEventPublisher()
 
     def get_permissions(self):
-        """Permite acceso público a register, login y logout."""
-        if self.action in ('create', 'login', 'logout'):
+        """Permite acceso publico a register, login y logout."""
+        if self.action in ("create", "login", "logout"):
             return [AllowAny()]
         return super().get_permissions()
 
+    # -- POST /api/auth/  ->  Register ------------------------------------
     def create(self, request):
         """
-        POST /api/auth/register/
-        Registrar un nuevo usuario
+        Registrar un nuevo usuario.
+
+        Request body (application/json):
+            { "email": "...", "username": "...", "password": "..." }
+
+        Success 201 Created:
+            JSON:API resource object + HttpOnly auth cookies.
+
+        Errors:
+            409 Conflict -- email ya registrado.
+            422 Unprocessable Entity -- datos invalidos.
         """
-        # 1. Validar input
         serializer = RegisterUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # 2. Ejecutar caso de uso
         data = cast(Dict[str, Any], serializer.validated_data)
-        try:
-            command = RegisterUserCommand(
-                email=data['email'],
-                username=data['username'],
-                password=data['password'],
-            )
 
-            use_case = RegisterUserUseCase(
-                repository=self.repository,
-                event_publisher=self.event_publisher
-            )
+        command = RegisterUserCommand(
+            email=data["email"],
+            username=data["username"],
+            password=data["password"],
+        )
+        use_case = RegisterUserUseCase(
+            repository=self.repository,
+            event_publisher=self.event_publisher,
+        )
 
-            auth_result = use_case.execute(command)
-            user = auth_result['user']
-            tokens = auth_result['tokens']
+        # Excepciones de dominio (UserAlreadyExists, InvalidEmail, etc.)
+        # se propagan al exception handler global.
+        auth_result = use_case.execute(command)
+        user = auth_result["user"]
+        tokens = auth_result["tokens"]
 
-            user_data = {
-                'id': str(user.id),
-                'email': user.email,
-                'username': user.username,
-                'role': user.role.value,
-                'is_active': user.is_active,
-            }
-            response = Response({'user': user_data}, status=status.HTTP_201_CREATED)
-            return set_auth_cookies(response, tokens['access'], tokens['refresh'])
+        resource = user_resource(user, request=request)
+        response = success_response(
+            resource,
+            status=status.HTTP_201_CREATED,
+            headers={"Location": f"/api/users/{user.id}/"},
+        )
+        return set_auth_cookies(response, tokens["access"], tokens["refresh"])
 
-        except UserAlreadyExists as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except (InvalidEmail, InvalidUsername, InvalidUserData) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            return Response(
-                {'error': f'Error inesperado: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=False, methods=['post'], url_path='login')
+    # -- POST /api/auth/login/ --------------------------------------------
+    @action(detail=False, methods=["post"], url_path="login")
     def login(self, request):
         """
-        POST /api/auth/login/
-        Autenticar un usuario
+        Autenticar un usuario existente.
+
+        Request body:
+            { "email": "...", "password": "..." }
+
+        Success 200 OK:
+            JSON:API resource object + HttpOnly auth cookies.
+
+        Errors:
+            401 Unauthorized -- credenciales invalidas / usuario inactivo.
+            422 Unprocessable Entity -- datos de entrada invalidos.
         """
-        # 1. Validar input
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # 2. Ejecutar caso de uso
         data = cast(Dict[str, Any], serializer.validated_data)
-        try:
-            command = LoginCommand(
-                email=data['email'],
-                password=data['password']
-            )
 
-            use_case = LoginUseCase(repository=self.repository)
-            auth_result = use_case.execute(command)
-            user = auth_result['user']
-            tokens = auth_result['tokens']
+        command = LoginCommand(email=data["email"], password=data["password"])
+        use_case = LoginUseCase(repository=self.repository)
 
-            user_data = {
-                'id': str(user.id),
-                'email': user.email,
-                'username': user.username,
-                'role': user.role.value,
-                'is_active': user.is_active,
-            }
-            response = Response({'user': user_data}, status=status.HTTP_200_OK)
-            return set_auth_cookies(response, tokens['access'], tokens['refresh'])
+        auth_result = use_case.execute(command)
+        user = auth_result["user"]
+        tokens = auth_result["tokens"]
 
-        except InvalidCredentials as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        except Exception as e:
-            return Response(
-                {'error': f'Error inesperado: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        resource = user_resource(user, request=request)
+        response = success_response(resource, status=status.HTTP_200_OK)
+        return set_auth_cookies(response, tokens["access"], tokens["refresh"])
 
-    @action(detail=False, methods=['get'], url_path='me')
+    # -- GET /api/auth/me/ ------------------------------------------------
+    @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
         """
-        GET /api/auth/me/
-        Return the currently authenticated user's data.
-        Reads the access_token from the HttpOnly cookie (handled by
-        CookieJWTAuthentication). Requires authentication.
+        Datos del usuario autenticado.
+
+        Success 200 OK:
+            JSON:API resource object con datos del usuario actual.
+
+        Errors:
+            401 Unauthorized -- no autenticado.
         """
         user = request.user
-        role = getattr(user.role, 'value', user.role) if hasattr(user, 'role') else 'USER'
-        return Response(
-            {
-                'id': str(user.id),
-                'email': user.email,
-                'username': user.username,
-                'role': role,
-                'is_active': user.is_active,
-            },
-            status=status.HTTP_200_OK,
-        )
+        resource = user_resource(user, request=request)
+        return success_response(resource, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['post'], url_path='logout')
+    # -- POST /api/auth/logout/ -------------------------------------------
+    @action(detail=False, methods=["post"], url_path="logout")
     def logout(self, request):
         """
-        POST /api/auth/logout/
-        Log out by clearing authentication cookies.
-        Public so that expired-token requests can still clear cookies.
+        Cerrar sesion limpiando cookies de autenticacion.
+
+        Success 200 OK:
+            Confirmacion de cierre de sesion.
         """
-        response = Response({'detail': 'Sesión cerrada'}, status=status.HTTP_200_OK)
+        response = Response(
+            {
+                "data": None,
+                "meta": {
+                    **_meta(),
+                    "message": "Session closed successfully.",
+                },
+            },
+            status=status.HTTP_200_OK,
+            content_type="application/vnd.api+json",
+        )
         return clear_auth_cookies(response)
 
-    @action(detail=False, methods=['get'], url_path='by-role/(?P<role>[^/.]+)')
+    # -- GET /api/auth/by-role/{role}/ ------------------------------------
+    @action(detail=False, methods=["get"], url_path=r"by-role/(?P<role>[^/.]+)")
     def by_role(self, request, role=None):
         """
-        GET /api/auth/by-role/{role}/
-        Obtener usuarios por rol (ADMIN o USER)
+        Obtener usuarios filtrados por rol.
+
+        Path parameters:
+            role -- "ADMIN" o "USER".
+
+        Success 200 OK:
+            JSON:API collection de usuarios.
+
+        Errors:
+            422 Unprocessable Entity -- rol invalido.
         """
-        if role is None:
-            return Response(
-                {'error': 'El parámetro role es requerido'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        try:
-            command = GetUsersByRoleCommand(role=role)
-            use_case = GetUsersByRoleUseCase(repository=self.repository)
-            users = use_case.execute(command)
+        command = GetUsersByRoleCommand(role=role)
+        use_case = GetUsersByRoleUseCase(repository=self.repository)
+        users = use_case.execute(command)
 
-            # Serializar lista de usuarios
-            users_data = [
-                {
-                    'id': user.id,
-                    'email': user.email,
-                    'username': user.username,
-                    'role': user.role.value,
-                    'is_active': user.is_active
-                }
-                for user in users
-            ]
+        resources = [user_resource(u, request=request) for u in users]
+        return collection_response(resources, status=status.HTTP_200_OK)
 
-            return Response(users_data, status=status.HTTP_200_OK)
 
-        except InvalidRole as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            return Response(
-                {'error': f'Error inesperado: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
+# ===========================================================================
+# Cookie Token Refresh
+# ===========================================================================
 
 class CookieTokenRefreshView(APIView):
     """
-    Refresh JWT tokens by reading refresh_token from HttpOnly cookie.
-
     POST /api/auth/refresh/
 
-    Reads the refresh_token cookie, generates a new access token (and
-    optionally rotates the refresh token), and sets both as new cookies.
+    Renueva el access token leyendo el refresh_token de la cookie HttpOnly.
+
+    Success 200 OK:
+        Nuevas cookies con tokens renovados.
+
+    Errors:
+        401 Unauthorized -- refresh token ausente, invalido o expirado.
     """
 
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
-        """Refresh access token using the refresh_token cookie."""
-        refresh_token = request.COOKIES.get('refresh_token')
+        refresh_token = request.COOKIES.get("refresh_token")
         if not refresh_token:
-            return Response(
-                {'error': 'Refresh token no encontrado'},
-                status=status.HTTP_401_UNAUTHORIZED,
+            return unauthorized_error(
+                detail="Refresh token not found in cookies.",
+                code="refresh_token_missing",
             )
 
         try:
@@ -423,37 +309,48 @@ class CookieTokenRefreshView(APIView):
             new_refresh = str(refresh)
 
             response = Response(
-                {'detail': 'Token renovado'}, status=status.HTTP_200_OK
+                {
+                    "data": None,
+                    "meta": {
+                        **_meta(),
+                        "message": "Token refreshed successfully.",
+                    },
+                },
+                status=status.HTTP_200_OK,
+                content_type="application/vnd.api+json",
             )
             return set_auth_cookies(response, new_access, new_refresh)
 
         except TokenError:
-            response = Response(
-                {'error': 'Refresh token inválido o expirado'},
-                status=status.HTTP_401_UNAUTHORIZED,
+            resp = unauthorized_error(
+                detail="Refresh token is invalid or expired.",
+                code="refresh_token_invalid",
             )
-            return clear_auth_cookies(response)
+            return clear_auth_cookies(resp)
 
         except Exception as e:
-            # Catch-all to prevent 500 errors from unexpected exceptions
-            logger.error(f'Unexpected error during token refresh: {e}', exc_info=True)
-            response = Response(
-                {'error': 'Error al renovar token'},
-                status=status.HTTP_401_UNAUTHORIZED,
+            logger.error("Unexpected error during token refresh: %s", e, exc_info=True)
+            resp = unauthorized_error(
+                detail="Could not refresh token.",
+                code="refresh_error",
             )
-            return clear_auth_cookies(response)
+            return clear_auth_cookies(resp)
 
+
+# ===========================================================================
+# User ViewSet (CRUD)
+# ===========================================================================
 
 class UserViewSet(viewsets.ViewSet):
     """
-    ViewSet para gestión de usuarios.
+    Gestion de usuarios (requiere autenticacion).
 
     Endpoints:
-    - GET    /api/users/                  — Listar todos los usuarios
-    - GET    /api/users/{id}/             — Obtener usuario por ID
-    - PATCH  /api/users/{id}/             — Actualizar email del usuario
-    - POST   /api/users/{id}/deactivate/  — Desactivar usuario
-    - DELETE /api/users/{id}/             — Eliminar usuario permanentemente
+        GET    /api/users/                   -- Listar usuarios (200).
+        GET    /api/users/{id}/              -- Obtener usuario (200 | 404).
+        PATCH  /api/users/{id}/              -- Actualizar email (200 | 404 | 409 | 422).
+        POST   /api/users/{id}/deactivate/   -- Desactivar usuario (200 | 404 | 409).
+        DELETE /api/users/{id}/              -- Eliminar usuario (204 | 404).
     """
 
     permission_classes = [IsAuthenticated]
@@ -463,107 +360,110 @@ class UserViewSet(viewsets.ViewSet):
         self.repository = DjangoUserRepository()
         self.event_publisher = RabbitMQEventPublisher()
 
-    @staticmethod
-    def _serialize_user(user) -> dict:
-        """Serializa una entidad User de dominio a dict de respuesta."""
-        return {
-            'id': str(user.id),
-            'email': user.email,
-            'username': user.username,
-            'role': user.role.value,
-            'is_active': user.is_active,
-        }
-
+    # -- GET /api/users/ --------------------------------------------------
     def list(self, request):
         """
-        GET /api/users/
         Listar todos los usuarios del sistema.
+
+        Success 200 OK:
+            JSON:API collection con meta.count.
         """
         use_case = ListUsersUseCase(repository=self.repository)
         users = use_case.execute()
-        return Response(
-            [self._serialize_user(u) for u in users],
-            status=status.HTTP_200_OK,
-        )
+        resources = [user_resource(u, request=request) for u in users]
+        return collection_response(resources, status=status.HTTP_200_OK)
 
+    # -- GET /api/users/{id}/ ---------------------------------------------
     def retrieve(self, request, pk=None):
         """
-        GET /api/users/{id}/
         Obtener un usuario por ID.
-        """
-        try:
-            use_case = GetUserUseCase(repository=self.repository)
-            user = use_case.execute(user_id=pk)
-            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
-        except UserNotFound:
-            return Response(
-                {'error': f'Usuario {pk} no encontrado'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
 
+        Success 200 OK:
+            JSON:API resource object.
+
+        Errors:
+            404 Not Found -- usuario no existe.
+        """
+        use_case = GetUserUseCase(repository=self.repository)
+        user = use_case.execute(user_id=pk)  # UserNotFound -> handler global
+        resource = user_resource(user, request=request)
+        return success_response(resource, status=status.HTTP_200_OK)
+
+    # -- PATCH /api/users/{id}/ -------------------------------------------
     def partial_update(self, request, pk=None):
         """
-        PATCH /api/users/{id}/
         Actualizar el email del usuario.
+
+        Request body:
+            { "email": "new@example.com" }
+
+        Success 200 OK:
+            JSON:API resource object actualizado.
+
+        Errors:
+            404 Not Found -- usuario no existe.
+            409 Conflict -- email ya en uso.
+            422 Unprocessable Entity -- email invalido.
         """
         serializer = UpdateUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            command = ChangeUserEmailCommand(
-                user_id=pk,
-                new_email=serializer.validated_data['email'],
-            )
-            use_case = ChangeUserEmailUseCase(
-                repository=self.repository,
-                event_publisher=self.event_publisher,
-            )
-            user = use_case.execute(command)
-            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
-        except UserNotFound:
-            return Response(
-                {'error': f'Usuario {pk} no encontrado'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except UserAlreadyExists as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except (InvalidEmail, InvalidUserData) as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['post'], url_path='deactivate')
+        command = ChangeUserEmailCommand(
+            user_id=pk,
+            new_email=serializer.validated_data["email"],
+        )
+        use_case = ChangeUserEmailUseCase(
+            repository=self.repository,
+            event_publisher=self.event_publisher,
+        )
+        user = use_case.execute(command)
+        resource = user_resource(user, request=request)
+        return success_response(resource, status=status.HTTP_200_OK)
+
+    # -- POST /api/users/{id}/deactivate/ ---------------------------------
+    @action(detail=True, methods=["post"], url_path="deactivate")
     def deactivate(self, request, pk=None):
         """
-        POST /api/users/{id}/deactivate/
         Desactivar un usuario (impide su acceso al sistema).
+
+        Request body (opcional):
+            { "reason": "Motivo de la desactivacion" }
+
+        Success 200 OK:
+            JSON:API resource object con is_active=false.
+
+        Errors:
+            404 Not Found -- usuario no existe.
+            409 Conflict -- usuario ya inactivo.
         """
         serializer = DeactivateUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            command = DeactivateUserCommand(
-                user_id=pk,
-                reason=serializer.validated_data.get('reason') or None,
-            )
-            use_case = DeactivateUserUseCase(
-                repository=self.repository,
-                event_publisher=self.event_publisher,
-            )
-            user = use_case.execute(command)
-            return Response(self._serialize_user(user), status=status.HTTP_200_OK)
-        except UserNotFound:
-            return Response(
-                {'error': f'Usuario {pk} no encontrado'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
 
+        command = DeactivateUserCommand(
+            user_id=pk,
+            reason=serializer.validated_data.get("reason") or None,
+        )
+        use_case = DeactivateUserUseCase(
+            repository=self.repository,
+            event_publisher=self.event_publisher,
+        )
+        user = use_case.execute(command)
+        resource = user_resource(user, request=request)
+        return success_response(resource, status=status.HTTP_200_OK)
+
+    # -- DELETE /api/users/{id}/ ------------------------------------------
     def destroy(self, request, pk=None):
         """
-        DELETE /api/users/{id}/
         Eliminar un usuario permanentemente.
+
+        Success 204 No Content (RFC 7231 6.3.5):
+            Sin cuerpo de respuesta.
+
+        Errors:
+            404 Not Found -- usuario no existe.
         """
         user = self.repository.find_by_id(pk)
         if not user:
-            return Response(
-                {'error': f'Usuario {pk} no encontrado'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            raise UserNotFound(pk)
         self.repository.delete(pk)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return no_content_response()
