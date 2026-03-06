@@ -15,7 +15,7 @@ CAPA DE MENSAJERÍA - messaging/
 
 🎯 FLUJO TÍPICO:
    RabbitMQ → Consumer → Handler → Use Case → Domain
-   
+
    Ejemplo:
    1. El ticket-service publica: TicketAssigned(ticket_id, user_id)
    2. El consumer de users-service lo recibe

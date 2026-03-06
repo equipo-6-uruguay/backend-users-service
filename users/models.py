@@ -31,12 +31,12 @@ import uuid
 
 class User(models.Model):
     """Modelo Django para persistir usuarios en la base de datos"""
-    
+
     class RoleChoices(models.TextChoices):
         """Choices para los roles de usuario"""
         ADMIN = "ADMIN", "Admin"
         USER = "USER", "User"
-    
+
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -59,7 +59,7 @@ class User(models.Model):
         choices=RoleChoices.choices,
         default=RoleChoices.USER
     )
-    
+
     @property
     def is_authenticated(self):
         """Requerido por DRF IsAuthenticated permission"""
@@ -67,7 +67,7 @@ class User(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'users'
         ordering = ['-created_at']
@@ -75,6 +75,6 @@ class User(models.Model):
             models.Index(fields=['email']),
             models.Index(fields=['username']),
         ]
-    
+
     def __str__(self):
         return f"{self.username} ({self.email}) - {self.role}"

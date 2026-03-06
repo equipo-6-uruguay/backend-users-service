@@ -9,8 +9,10 @@ Verifies that:
 """
 
 import pytest
+from unittest.mock import patch
 from django.test import TestCase, Client
 from users.models import User
+from users.infrastructure.event_publisher import RabbitMQEventPublisher
 import hashlib
 
 
@@ -51,7 +53,7 @@ class TestLoginCookies(TestCase):
         self.assertTrue(refresh_cookie['httponly'])
 
     def test_login_response_body_has_no_tokens(self):
-        """Login response body should contain user data but NO tokens."""
+        """Login response body should contain user data in JSON:API format but NO tokens."""
         response = self.client.post(
             '/api/auth/login/',
             data={'email': 'test@example.com', 'password': self.password},
@@ -59,9 +61,11 @@ class TestLoginCookies(TestCase):
         )
         data = response.json()
 
-        # Body should have user
-        self.assertIn('user', data)
-        self.assertEqual(data['user']['email'], 'test@example.com')
+        # Body should be JSON:API format with data.attributes containing user info
+        self.assertIn('data', data)
+        self.assertIn('attributes', data['data'])
+        self.assertEqual(data['data']['attributes']['email'], 'test@example.com')
+        self.assertEqual(data['data']['type'], 'users')
 
         # Body should NOT have tokens
         self.assertNotIn('tokens', data)
@@ -84,7 +88,12 @@ class TestRegisterCookies(TestCase):
     """Verify that register sets HttpOnly cookies."""
 
     def setUp(self):
+        self.publish_patcher = patch.object(RabbitMQEventPublisher, 'publish', return_value=None)
+        self.publish_patcher.start()
         self.client = Client()
+
+    def tearDown(self):
+        self.publish_patcher.stop()
 
     def test_register_sets_httponly_cookies(self):
         """POST /api/auth/ (register) should set HttpOnly cookies."""
@@ -93,7 +102,7 @@ class TestRegisterCookies(TestCase):
             data={
                 'email': 'newuser@example.com',
                 'username': 'newuser',
-                'password': 'securepass123',
+                'password': 'Securepass1',
             },
             content_type='application/json',
         )
@@ -105,19 +114,20 @@ class TestRegisterCookies(TestCase):
         self.assertTrue(response.cookies['refresh_token']['httponly'])
 
     def test_register_response_body_has_no_tokens(self):
-        """Register response body should contain user but NO tokens."""
+        """Register response body should contain user in JSON:API format but NO tokens."""
         response = self.client.post(
             '/api/auth/',
             data={
                 'email': 'newuser2@example.com',
                 'username': 'newuser2',
-                'password': 'securepass123',
+                'password': 'Securepass1',
             },
             content_type='application/json',
         )
         data = response.json()
 
-        self.assertIn('user', data)
+        self.assertIn('data', data)
+        self.assertIn('attributes', data['data'])
         self.assertNotIn('tokens', data)
 
 
@@ -138,7 +148,7 @@ class TestMeEndpoint(TestCase):
         )
 
     def test_me_with_valid_cookie_returns_user(self):
-        """GET /api/auth/me/ with valid access_token cookie should return user data."""
+        """GET /api/auth/me/ with valid access_token cookie should return user data in JSON:API format."""
         # First login to get cookies
         login_response = self.client.post(
             '/api/auth/login/',
@@ -152,8 +162,8 @@ class TestMeEndpoint(TestCase):
         self.assertEqual(me_response.status_code, 200)
 
         data = me_response.json()
-        self.assertEqual(data['email'], 'me@example.com')
-        self.assertEqual(data['username'], 'meuser')
+        self.assertEqual(data['data']['attributes']['email'], 'me@example.com')
+        self.assertEqual(data['data']['attributes']['username'], 'meuser')
 
     def test_me_without_cookie_returns_401(self):
         """GET /api/auth/me/ without cookie should return 401."""
@@ -182,10 +192,11 @@ class TestLogoutEndpoint(TestCase):
             self.assertEqual(refresh_cookie['max-age'], 0)
 
     def test_logout_returns_confirmation(self):
-        """POST /api/auth/logout/ should return confirmation message."""
+        """POST /api/auth/logout/ should return confirmation message in JSON:API meta."""
         response = self.client.post('/api/auth/logout/')
         data = response.json()
-        self.assertIn('detail', data)
+        self.assertIn('meta', data)
+        self.assertIn('message', data['meta'])
 
 
 @pytest.mark.django_db
